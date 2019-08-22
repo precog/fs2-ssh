@@ -22,10 +22,12 @@ import scala.{Array, Option, None, Product, Serializable}
 import java.lang.{String, SuppressWarnings}
 import java.nio.file.Path
 
-@SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
 sealed trait Auth extends Product with Serializable
 
 object Auth {
+
   final case class Password(text: String) extends Auth
+
+  @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
   final case class Key(privateKey: Path, password: Option[String] = None) extends Auth
 }
