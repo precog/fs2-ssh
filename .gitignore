@@ -1,0 +1,18 @@
+target/
+.targets/
+
+# sbt-slamdata common resources
+/scripts/bumpDependentProject
+/scripts/checkAndAutoMerge
+/scripts/commonSetup
+/credentials.bintray.enc
+/credentials.sonatype.enc
+/scripts/discordTravisPost
+/scripts/isRevision
+/scripts/listLabels
+/scripts/closePR
+/pgppassphrase.sbt.enc
+/scripts/publishAndTag
+/pubring.pgp.enc
+/scripts/readVersion
+/secring.pgp.enc

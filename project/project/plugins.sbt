@@ -1,0 +1,5 @@
+resolvers += Resolver.sonatypeRepo("releases")
+resolvers += Resolver.bintrayRepo("slamdata-inc", "maven-public")
+
+addSbtPlugin("io.get-coursier" % "sbt-coursier" % "1.1.0-M13-4")
+addSbtPlugin("com.slamdata"    % "sbt-slamdata" % "3.1.0")
