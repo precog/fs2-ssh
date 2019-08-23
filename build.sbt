@@ -27,5 +27,21 @@ lazy val core = project
       "co.fs2"        %% "fs2-io"      % "1.0.5"),
 
     performMavenCentralSync := false,
-    publishAsOSSProject := true)
+    publishAsOSSProject := true,
+
+    initialCommands := """
+      | import scala._, Predef._
+      |
+      | import cats.effect._
+      | import cats.implicits._
+      |
+      | import fs2._
+      | import fs2.io.ssh._
+      |
+      | import scala.concurrent.ExecutionContext
+      |
+      | import java.net.InetSocketAddress
+      |
+      | val blocker = Blocker[IO]
+      | implicit val cs = IO.contextShift(ExecutionContext.global)""".stripMargin)
   .enablePlugins(AutomateHeaderPlugin)
