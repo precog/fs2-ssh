@@ -20,6 +20,12 @@ lazy val core = project
   .in(file("core"))
   .settings(name := "fs2-ssh")
   .settings(
+    libraryDependencies ++= Seq(
+      "com.hierynomus" % "sshj" % "0.27.0",
+
+      "org.typelevel" %% "cats-effect" % "1.4.0",
+      "co.fs2"        %% "fs2-io"      % "1.0.5"),
+
     performMavenCentralSync := false,
     publishAsOSSProject := true)
   .enablePlugins(AutomateHeaderPlugin)
