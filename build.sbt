@@ -40,8 +40,12 @@ lazy val core = project
       |
       | import scala.concurrent.ExecutionContext
       |
-      | import java.net.InetSocketAddress
+      | import java.nio.file.Paths
       |
-      | val blocker = Blocker[IO]
-      | implicit val cs = IO.contextShift(ExecutionContext.global)""".stripMargin)
+      | val blockerR = Blocker[IO]
+      | implicit val cs = IO.contextShift(ExecutionContext.global)
+      |
+      | val auth = Auth.Key(Paths.get("id_rsa_testing"), None)""".stripMargin,
+
+    Compile / console / scalacOptions += "-Ydelambdafy:inline")
   .enablePlugins(AutomateHeaderPlugin)

@@ -26,7 +26,7 @@ import net.schmizz.sshj.connection.channel.direct.Session
 import scala.{Array, Int, None, Some}
 
 import java.lang.{String, SuppressWarnings}
-import java.net.InetSocketAddress
+import java.net.{InetAddress, InetSocketAddress}
 
 object Client {
 
@@ -46,6 +46,14 @@ object Client {
 
       r.map(new Process[F](_, blocker, chunkSize))
     }
+
+  // convenience function that really should live elsewhere
+  def resolve[F[_]: Sync: ContextShift](
+      hostname: String,
+      port: Int,
+      blocker: Blocker)
+      : F[InetSocketAddress] =
+    blocker.blockOn(Sync[F].delay(new InetSocketAddress(InetAddress.getByName(hostname), port)))
 
   // TODO error handling
   @SuppressWarnings(Array("org.wartremover.warts.ToString"))
