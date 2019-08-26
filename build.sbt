@@ -26,6 +26,6 @@ lazy val core = project
       "org.typelevel" %% "cats-effect" % "1.4.0",
       "co.fs2"        %% "fs2-io"      % "1.0.5"),
 
-    performMavenCentralSync := false,
+    performMavenCentralSync := true,
     publishAsOSSProject := true)
   .enablePlugins(AutomateHeaderPlugin)
