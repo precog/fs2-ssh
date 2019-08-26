@@ -27,5 +27,25 @@ lazy val core = project
       "co.fs2"        %% "fs2-io"      % "1.0.5"),
 
     performMavenCentralSync := true,
-    publishAsOSSProject := true)
+    publishAsOSSProject := true,
+
+    initialCommands := """
+      | import scala._, Predef._
+      |
+      | import cats.effect._
+      | import cats.implicits._
+      |
+      | import fs2._
+      | import fs2.io.ssh._
+      |
+      | import scala.concurrent.ExecutionContext
+      |
+      | import java.nio.file.Paths
+      |
+      | val blockerR = Blocker[IO]
+      | implicit val cs = IO.contextShift(ExecutionContext.global)
+      |
+      | val auth = Auth.Key(Paths.get("id_rsa_testing"), None)""".stripMargin,
+
+    Compile / console / scalacOptions += "-Ydelambdafy:inline")
   .enablePlugins(AutomateHeaderPlugin)
