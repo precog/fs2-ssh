@@ -6,6 +6,8 @@ scmInfo in ThisBuild := Some(ScmInfo(
   url("https://github.com/slamdata/fs2-ssh"),
   "scm:git@github.com:slamdata/fs2-ssh.git"))
 
+val SshdVersion = "2.3.0"
+
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
   publishArtifact in (Test, packageBin) := true)
@@ -21,7 +23,8 @@ lazy val core = project
   .settings(name := "fs2-ssh")
   .settings(
     libraryDependencies ++= Seq(
-      "com.hierynomus" % "sshj" % "0.27.0",
+      "org.apache.sshd" % "sshd-core" % SshdVersion,
+      "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
       "org.typelevel" %% "cats-effect" % "1.4.0",
       "co.fs2"        %% "fs2-io"      % "1.0.5"),

@@ -18,54 +18,42 @@ package fs2
 package io
 package ssh
 
-import cats.effect.{Blocker, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.syntax.bracket._
 
-import net.schmizz.sshj.connection.channel.direct.Session.Command
+import org.apache.sshd.client.channel.ChannelExec
+import org.apache.sshd.common.future.{CloseFuture, SshFutureListener}
 
 import scala.{Array, Byte, Int, Unit}
+import scala.util.Right
 
 import java.lang.SuppressWarnings
 
-@SuppressWarnings(Array("org.wartremover.warts.PublicInference"))
-final class Process[F[_]: Sync: ContextShift] private[ssh] (
-    command: Command,
-    blocker: Blocker,
-    chunkSize: Int) {
+final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
+    channel: ChannelExec,
+    val stdout: Stream[F, Byte],
+    val stderr: Stream[F, Byte],
+    val stdin: Pipe[F, Byte, Unit]) {
 
-  import blocker.blockOn
-  private[this] val F = Sync[F]
-
-  val stdout: Stream[F, Byte] =
-    readInputStream(
-      blockOn(F.delay(command.getInputStream)),
-      chunkSize,
-      blocker.blockingContext,
-      closeAfterUse = false)
-
-  val stderr: Stream[F, Byte] =
-    readInputStream(
-      blockOn(F.delay(command.getErrorStream)),
-      chunkSize,
-      blocker.blockingContext,
-      closeAfterUse = false)
-
-  val stdin: Pipe[F, Byte, Unit] =
-    writeOutputStream(
-      blockOn(F.delay(command.getOutputStream)),
-      blocker.blockingContext,
-      closeAfterUse = false)
+  private[this] val F = Concurrent[F]
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
   val join: F[Int] =
-    blockOn {
-      F delay {
-        command.join()
+    Concurrent cancelableF[F, Int] { cb =>
+      Sync[F] delay {
+        val listener: SshFutureListener[CloseFuture] = { _ =>
+          val status = channel.getExitStatus()
+          val statusI = if (status != null)
+            status.intValue
+          else
+            0
 
-        val status = command.getExitStatus()
-        if (status eq null)
-          0   // ???
-        else
-          status.intValue
+          cb(Right(statusI))
+        }
+
+        channel.addCloseFutureListener(listener)
+
+        Sync[F].delay(channel.removeCloseFutureListener(listener))
       }
-    }
+    } guarantee ContextShift[F].shift
 }
