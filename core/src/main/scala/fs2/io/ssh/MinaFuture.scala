@@ -21,6 +21,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.effect.syntax.bracket._
 import cats.implicits._
 
+import org.apache.sshd.client.future.OpenFuture
 import org.apache.sshd.common.future.{CloseFuture, SshFuture}
 import org.apache.sshd.common.io.{IoReadFuture, IoWriteFuture}
 import org.apache.sshd.client.session.ClientSession
@@ -80,6 +81,14 @@ private[ssh] object MinaFuture {
     def cancel(s: AuthFuture) = s.cancel()
     def exception(s: AuthFuture) = s.getException()
     def result(s: AuthFuture) = s.isSuccess()
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
+  implicit object SaneOpenFuture extends MinaFuture[OpenFuture] {
+    type A = Boolean
+    def cancel(s: OpenFuture) = s.cancel()
+    def exception(s: OpenFuture) = s.getException()
+    def result(s: OpenFuture) = s.isOpened()
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Null"))

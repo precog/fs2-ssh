@@ -37,7 +37,11 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
 
   private val F = Concurrent[F]
 
-  @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
+  @SuppressWarnings(
+    Array(
+      "org.wartremover.warts.DefaultArguments",
+      "org.wartremover.warts.Null",
+      "org.wartremover.warts.ToString"))
   def exec(
       cc: ConnectionConfig,
       command: String,
@@ -62,10 +66,17 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
 
               _ <- maybePass match {
                 case Some(password) =>
-                  F.delay(provider.setPasswordFinder(FilePasswordProvider.of(password)))
+                  F delay {
+                    provider setPasswordFinder { (session, key, index) =>
+                      if (key.getName() === path.toString)
+                        password
+                      else
+                        null
+                    }
+                  }
 
                 case None =>
-                  F.unit
+                  F.delay(provider.setPasswordFinder(FilePasswordProvider.EMPTY))
               }
 
               pairs <- blocker.blockOn(F.delay(provider.loadKeys(session)))
@@ -81,7 +92,11 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
       // TODO handle auth failure (minor problems...)
 
       channel <- Resource.make(
-        F.delay(session.createExecChannel(command)))(
+        for {
+          channel <- F.delay(session.createExecChannel(command))
+          opened <- fromFuture(F.delay(channel.open()))
+          // TODO handle failure opening
+        } yield channel)(
         channel => fromFuture(F.delay(channel.close(false))).void)
 
       stdout = Stream.force(F.delay(ioisToStream(channel.getAsyncOut(), chunkSize)))
@@ -115,7 +130,7 @@ object Client {
 
   def apply[F[_]: Concurrent: ContextShift]: Resource[F, Client[F]] = {
     val makeF = Sync[F] delay {
-      val client = new SshClient   // TODO is this good?
+      val client = SshClient.setUpDefaultClient()   // TODO is this good?
       client.start()
       client
     }
