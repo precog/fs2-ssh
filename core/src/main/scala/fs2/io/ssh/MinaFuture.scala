@@ -22,7 +22,8 @@ import cats.effect.syntax.bracket._
 import cats.implicits._
 
 import org.apache.sshd.client.future.OpenFuture
-import org.apache.sshd.common.future.{CloseFuture, SshFuture}
+import org.apache.sshd.common.Closeable
+import org.apache.sshd.common.future.{CloseFuture, SshFuture, SshFutureListener}
 import org.apache.sshd.common.io.{IoReadFuture, IoWriteFuture}
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.client.future.{AuthFuture, ConnectFuture}
@@ -63,6 +64,20 @@ private[ssh] object MinaFuture {
 
           Sync[F].delay(S.cancel(fut))
         }
+      }
+    }
+
+    fa.guarantee(ContextShift[F].shift)
+  }
+
+  def awaitClose[F[_]: Concurrent: ContextShift](c: Closeable): F[Unit] = {
+    val fa = Concurrent cancelableF[F, Unit] { cb =>
+      Sync[F] delay {
+        val listener: SshFutureListener[CloseFuture] =
+          _ => cb(Right(()))
+
+        c.addCloseFutureListener(listener)
+        Sync[F].delay(c.removeCloseFutureListener(listener))
       }
     }
 

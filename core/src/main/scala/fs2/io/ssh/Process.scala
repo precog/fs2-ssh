@@ -19,13 +19,11 @@ package io
 package ssh
 
 import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.effect.syntax.bracket._
+import cats.implicits._
 
 import org.apache.sshd.client.channel.ChannelExec
-import org.apache.sshd.common.future.{CloseFuture, SshFutureListener}
 
 import scala.{Array, Byte, Int, Unit}
-import scala.util.Right
 
 import java.lang.SuppressWarnings
 
@@ -35,25 +33,16 @@ final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
     val stderr: Stream[F, Byte],
     val stdin: Pipe[F, Byte, Unit]) {
 
-  private[this] val F = Concurrent[F]
-
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  val join: F[Int] =
-    Concurrent cancelableF[F, Int] { cb =>
-      Sync[F] delay {
-        val listener: SshFutureListener[CloseFuture] = { _ =>
-          val status = channel.getExitStatus()
-          val statusI = if (status != null)
-            status.intValue
-          else
-            0
+  val join: F[Int] = {
+    val statusF = Sync[F] delay {
+      val status = channel.getExitStatus()
+      if (status != null)
+        status.intValue
+      else
+        0
+    }
 
-          cb(Right(statusI))
-        }
-
-        channel.addCloseFutureListener(listener)
-
-        Sync[F].delay(channel.removeCloseFutureListener(listener))
-      }
-    } guarantee ContextShift[F].shift
+    MinaFuture.awaitClose[F](channel) >> statusF
+  }
 }

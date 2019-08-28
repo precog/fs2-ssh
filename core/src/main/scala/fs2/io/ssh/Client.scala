@@ -30,11 +30,12 @@ import org.apache.sshd.common.util.buffer.ByteArrayBuffer
 import scala.{Array, Byte, Int, None, Some, Unit}
 import scala.collection.JavaConverters._
 
-import java.lang.{String, SuppressWarnings}
+import java.io.IOException
+import java.lang.{String, SuppressWarnings, Throwable}
 import java.net.{InetAddress, InetSocketAddress}
 
 final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
-  import MinaFuture.fromFuture
+  import MinaFuture._
 
   private val F = Concurrent[F]
 
@@ -110,7 +111,22 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
   // TODO I'm pretty sure this stream is ephemeral and we might miss things
   private[this] def ioisToStream(iois: IoInputStream, chunkSize: Int): Stream[F, Byte] = {
     val readF = fromFuture(F.delay(iois.read(new ByteArrayBuffer(chunkSize))))
-    Stream.eval(readF).repeat.takeWhile(!_.isEmpty).flatMap(Stream.chunk(_))
+
+    Stream.eval(readF)
+      .repeat
+      .handleErrorWith {
+        case t: IOException =>
+          Stream.eval(F.delay(iois.isClosed() || iois.isClosing())) flatMap { closing =>
+            if (closing)
+              Stream.empty
+            else
+              Stream.raiseError[F](t)
+          }
+
+        case t: Throwable =>
+          Stream.raiseError[F](t)
+      }
+      .flatMap(Stream.chunk(_))
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
