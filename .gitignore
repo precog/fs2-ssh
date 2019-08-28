@@ -1,3 +1,6 @@
+/keys/nopassword
+/keys/password
+
 target/
 .targets/
 

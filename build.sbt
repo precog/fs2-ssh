@@ -27,7 +27,9 @@ lazy val core = project
       "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
       "org.typelevel" %% "cats-effect" % "1.4.0",
-      "co.fs2"        %% "fs2-io"      % "1.0.5"),
+      "co.fs2"        %% "fs2-io"      % "1.0.5",
+
+      "org.specs2" %% "specs2-core" % "4.7.0" % Test),
 
     performMavenCentralSync := true,
     publishAsOSSProject := true,

@@ -22,16 +22,14 @@ import cats.implicits._
 
 import org.apache.sshd.client.SshClient
 import org.apache.sshd.client.channel.ClientChannel
+import org.apache.sshd.client.config.hosts.HostConfigEntryResolver
 import org.apache.sshd.common.config.keys.FilePasswordProvider
-import org.apache.sshd.common.io.{IoInputStream, IoOutputStream}
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
-import org.apache.sshd.common.util.buffer.ByteArrayBuffer
 
-import scala.{Array, Byte, Int, None, Some, Unit}
+import scala.{Array, Int, None, Some}
 import scala.collection.JavaConverters._
 
-import java.io.IOException
-import java.lang.{String, SuppressWarnings, Throwable}
+import java.lang.{String, SuppressWarnings}
 import java.net.{InetAddress, InetSocketAddress}
 
 final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
@@ -61,15 +59,18 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
         case Auth.Password(text) =>
           Resource.liftF(F.delay(session.addPasswordIdentity(text)))
 
-        case Auth.Key(path, maybePass) =>
+        case Auth.Key(path0, maybePass) =>
           Resource liftF {
             for {
+              path <- blocker.blockOn(F.delay(path0.toAbsolutePath()))
               provider <- F.delay(new FileKeyPairProvider(path))
 
               _ <- maybePass match {
                 case Some(password) =>
                   F delay {
                     provider setPasswordFinder { (session, key, index) =>
+                      import scala.StringContext
+                      scala.Console.println(s">>>>> key = ${key.getName}; path = $path")
                       if (key.getName() === path.toString)
                         password
                       else
@@ -101,46 +102,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
           // TODO handle failure opening
         } yield channel)(
         channel => fromFuture(F.delay(channel.close(false))).void)
-
-      stdout = Stream.force(F.delay(ioisToStream(channel.getAsyncOut(), chunkSize)))
-      stderr = Stream.force(F.delay(ioisToStream(channel.getAsyncErr(), chunkSize)))
-      stdin = ioosToSink(F.delay(channel.getAsyncIn()))
-    } yield new Process[F](channel, stdout, stderr, stdin)
-  }
-
-  // TODO I'm pretty sure this stream is ephemeral and we might miss things
-  private[this] def ioisToStream(iois: IoInputStream, chunkSize: Int): Stream[F, Byte] = {
-    val readF = fromFuture(F.delay(iois.read(new ByteArrayBuffer(chunkSize))))
-
-    Stream.eval(readF)
-      .repeat
-      .handleErrorWith {
-        case t: IOException =>
-          Stream.eval(F.delay(iois.isClosed() || iois.isClosing())) flatMap { closing =>
-            if (closing)
-              Stream.empty
-            else
-              Stream.raiseError[F](t)
-          }
-
-        case t: Throwable =>
-          Stream.raiseError[F](t)
-      }
-      .flatMap(Stream.chunk(_))
-  }
-
-  @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  private[this] def ioosToSink(ioisF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
-    Stream.eval(ioisF) flatMap { iois =>
-      val written = in.chunks evalMap { chunk =>
-        val bytes = chunk.toBytes
-        val buffer = new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
-        buffer.wpos(bytes.length)
-        fromFuture(F.delay(iois.writePacket(buffer)))
-      }
-
-      written.takeWhile(_ == true).void
-    }
+    } yield new Process[F](channel, chunkSize)
   }
 }
 
@@ -148,7 +110,9 @@ object Client {
 
   def apply[F[_]: Concurrent: ContextShift]: Resource[F, Client[F]] = {
     val makeF = Sync[F] delay {
-      val client = SshClient.setUpDefaultClient()   // TODO is this good?
+      val client = SshClient.setUpDefaultClient()
+      client.setHostConfigEntryResolver(HostConfigEntryResolver.EMPTY)
+
       client.start()
       client
     }
