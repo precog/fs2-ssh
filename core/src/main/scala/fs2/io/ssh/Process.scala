@@ -80,20 +80,16 @@ final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
           Stream.raiseError[F](t)
       }
       .flatMap(Stream.chunk(_))
-      .onComplete {
-        // send EOF by closing the input stream
-        Stream.eval_(fromFuture(F.delay(iois.close(false))))
-      }
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  private[this] def ioosToSink(ioisF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
-    Stream.eval(ioisF) flatMap { iois =>
+  private[this] def ioosToSink(ioosF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
+    Stream.eval(ioosF) flatMap { ioos =>
       val written = in.chunks evalMap { chunk =>
         val bytes = chunk.toBytes
         val buffer = new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
         buffer.wpos(bytes.length)
-        fromFuture(F.delay(iois.writePacket(buffer)))
+        fromFuture(F.delay(ioos.writePacket(buffer)))
       }
 
       written.takeWhile(_ == true).void
