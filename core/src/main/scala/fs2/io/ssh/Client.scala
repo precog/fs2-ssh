@@ -21,6 +21,7 @@ import cats.effect.{Blocker, Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
 
 import org.apache.sshd.client.SshClient
+import org.apache.sshd.client.channel.ClientChannel
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.io.{IoInputStream, IoOutputStream}
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
@@ -94,6 +95,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
       channel <- Resource.make(
         for {
           channel <- F.delay(session.createExecChannel(command))
+          _ <- F.delay(channel.setStreaming(ClientChannel.Streaming.Async))
           opened <- fromFuture(F.delay(channel.open()))
           // TODO handle failure opening
         } yield channel)(
