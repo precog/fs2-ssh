@@ -1,3 +1,4 @@
+import sbt.TestFrameworks.Specs2
 import scala.collection.Seq
 
 homepage in ThisBuild := Some(url("https://github.com/slamdata/fs2-ssh"))
@@ -5,6 +6,8 @@ homepage in ThisBuild := Some(url("https://github.com/slamdata/fs2-ssh"))
 scmInfo in ThisBuild := Some(ScmInfo(
   url("https://github.com/slamdata/fs2-ssh"),
   "scm:git@github.com:slamdata/fs2-ssh.git"))
+
+logBuffered in ThisBuild := false
 
 val SshdVersion = "2.3.0"
 
@@ -32,6 +35,9 @@ lazy val core = project
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
       "org.specs2" %% "specs2-core" % "4.7.0"  % Test,
       "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.12.1" % Test),
+
+    Test / scalacOptions += "-Yrangepos",
+    Test / testOptions := Seq(Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")),
 
     performMavenCentralSync := true,
     publishAsOSSProject := true,
