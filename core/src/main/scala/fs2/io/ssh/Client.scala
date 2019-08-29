@@ -69,8 +69,6 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
                 case Some(password) =>
                   F delay {
                     provider setPasswordFinder { (session, key, index) =>
-                      import scala.StringContext
-                      scala.Console.println(s">>>>> key = ${key.getName}; path = $path")
                       if (key.getName() === path.toString)
                         password
                       else
