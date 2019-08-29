@@ -23,13 +23,15 @@ lazy val core = project
   .settings(name := "fs2-ssh")
   .settings(
     libraryDependencies ++= Seq(
-      "org.apache.sshd" % "sshd-core" % SshdVersion,
+      "org.apache.sshd" % "sshd-core"  % SshdVersion,
       "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
       "org.typelevel" %% "cats-effect" % "1.4.0",
       "co.fs2"        %% "fs2-core"    % "1.0.5",
 
-      "org.specs2" %% "specs2-core" % "4.7.0" % Test),
+      // apparently vertically aligning this chunk causes sbt to freak out... for reasons
+      "org.specs2" %% "specs2-core" % "4.7.0"  % Test,
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.12.1" % Test),
 
     performMavenCentralSync := true,
     publishAsOSSProject := true,
