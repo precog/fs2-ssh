@@ -37,9 +37,7 @@ before_install:
   - set -e
   - cd keys
   - 'openssl aes-256-cbc -K $key_19403187e0 -iv $iv_19403187e0 -in "nopassword.enc" -out "nopassword" -d'
-  - '[ $(openssl sha1 "nopassword" | egrep -o "[0-9a-f]+\$") != 17555de9f6fe6085d936c551899962b00cd7abe7 ] && echo "File nopassword failed to decrypt" && exit 1'
   - 'openssl aes-256-cbc -K $key_9812a889f5 -iv $iv_9812a889f5 -in "password.enc" -out "password" -d'
-  - '[ $(openssl sha1 "password" | egrep -o "[0-9a-f]+\$") != 97b45993f65d7752a013cb0c93e1252eddbd75a7 ] && echo "File password failed to decrypt" && exit 1'
   - cd ..
 
 install:
