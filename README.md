@@ -10,7 +10,95 @@ At present, only limited client functionality is offered, but future functionali
 libraryDependencies += "com.slamdata" %% "fs2-ssh" % <version>
 ```
 
-fs2-ssh is currently published for Scala 2.12. It depends on Cats Effect 1.4.0, fs2 1.0.5, SSHD 2.3.0, and Netty 4.1.39.
+fs2-ssh is currently published for Scala 2.12. It depends on Cats Effect 1.4.0, Cats MTL 0.5.0, fs2 1.0.5, SSHD 2.3.0, and Netty 4.1.39.
+
+What follows is a simple example of connecting to a remote server, running a command, printing the result and the status code, and then cleaning everything up:
+
+```scala
+import cats.data.EitherT
+import cats.effect._
+import cats.mtl.instances.all._
+import fs2.Sink
+import fs2.io.ssh.{Auth, Client, ConnectionConfig}
+
+object Example extends IOApp {
+  def run(args: List[String]) = {
+    val r = for {
+      blocker <- Blocker[IO]
+      client <- Client[IO]
+
+      host <- Resource.liftF(Client.resolve[IO]("remotehost.com", 22, blocker))
+
+      // you're free to use something other than EitherT
+      // so long as it forms a FunctorRaise with Client.Error
+      et = client.exec[EitherT[IO, Client.Error, ?]](
+        ConnectionConfig(
+          host,
+          "username",
+          Auth.Password("password")),
+        "whoami",   // or really any other command
+        blocker)
+
+      code <- et.value map {
+        case Left(Client.Error.Authentication) => 
+          Resource.liftF(IO(println("authentication error!"))).as(ExitCode(-1))
+
+        case Right(p) => 
+          for {
+            // also available: p.stderr and p.stdin
+            _ <- p.stdout.through(Sink.showLinesStdOut).compile.resource
+            statusCode <- Resource.liftF(p.join)
+            _ <- Resource.liftF(IO(println(s"remote exited with status $statusCode")))
+          } yield ExitCode(0)
+        }
+      }
+    } yield code
+
+    r.use(IO.pure(_))
+  }
+}
+```
+
+Replace the obvious host, user, and password stubs with something real and this will work. Public/private key authentication (including support for password-protected keys) is also supported with the `Auth.Key` case.
+
+Perhaps more realistically, here's an Ansible-style use-case where we fire-and-forget the `setup.sh` command to a zillion servers in parallel:
+
+```scala
+import cats.implicits._
+import java.nio.file.Paths
+
+val servers = List(/* a zillion hostnames here */)
+
+for {
+  client <- Client[IO]
+  blocker <- Blocker[IO]
+
+  _ <- Resource liftF {
+    servers parTraverse_ { host =>
+      val ret = for {
+        // the boilerplate here is... regretable
+        isa <- Client.resolve[Resource[EitherT[IO, Client.Error, ?], ?]](
+          host, 
+          22, 
+          blocker)
+        
+        _ <- client.exec(
+          ConnectionConfig(
+            isa,
+            "username",
+            Auth.Key(Paths.get("id_rsa"), None)),
+          "nohup ./setup.sh",
+          blocker)
+      } yield ()
+
+      // discard errors
+      ret.use(_ => unit).value.void
+    }
+  }
+} yield ()
+```
+
+The only limitation on the above is really memory. Due to the fact that the client is entirely asynchronous, no threads will be retained to manage active connections, and so it's really not that absurd to open millions of these things. Note that if you would *like* to do this in a memory-incremental fashion, you probably want to use the `Stream.resource` constructor and `parJoinUnbounded` in fs2, rather than going through `cats.Parallel` (as in the above), but this is just a simple example.
 
 ## Functionality
 
