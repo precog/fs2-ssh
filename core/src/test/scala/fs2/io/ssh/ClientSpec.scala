@@ -17,8 +17,12 @@
 package fs2
 package io.ssh
 
-import cats.effect.{Blocker, IO, Resource}
+import cats.Applicative
+import cats.data.EitherT
+import cats.effect.{Blocker, Concurrent, ContextShift, IO, Resource}
 import cats.implicits._
+import cats.mtl.FunctorRaise
+import cats.mtl.instances.all._
 
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
@@ -28,7 +32,7 @@ import scala.concurrent.duration._
 
 import scala.{math, sys, Byte, None, Some, StringContext, Unit}
 
-import java.lang.{String, System}
+import java.lang.{RuntimeException, String, System}
 import java.net.InetSocketAddress
 import java.nio.file.Paths
 
@@ -47,6 +51,16 @@ class ClientSpec extends Specification {
   val KeyPassword = "password"
 
   "ssh client" should {
+    final case class WrappedError(e: Client.Error) extends RuntimeException(e.toString)
+
+    // useful for tests where we're implicitly asserting no errors
+    implicit val throwingFR: FunctorRaise[IO, Client.Error] =
+      new FunctorRaise[IO, Client.Error] {
+        val functor = IO.ioEffect
+        def raise[A](e: Client.Error) =
+          IO.raiseError(WrappedError(e))
+      }
+
     "authenticate with a password" in setup { (blocker, client, isa) =>
       client.exec(
         ConnectionConfig(
@@ -56,6 +70,18 @@ class ClientSpec extends Specification {
         "whoami",
         blocker).void
     }
+
+    "report authentication failure" in setupF[EitherT[IO, Client.Error, ?]](
+      { (blocker, client, isa) =>
+        client.exec(
+          ConnectionConfig(
+            isa,
+            TestUser,
+            Auth.Password("bippy")),
+          "whoami",
+          blocker).void
+      },
+      _.value.unsafeRunTimed(Timeout) must beSome(beLeft(Client.Error.Authentication: Client.Error)))
 
     "authenticate with an unprotected key" in setup { (blocker, client, isa) =>
       client.exec(
@@ -207,14 +233,21 @@ class ClientSpec extends Specification {
     }
   }
 
-  def setup(f: (Blocker, Client[IO], InetSocketAddress) => Resource[IO, Unit]): Result = {
+  def setup(f: (Blocker, Client[IO], InetSocketAddress) => Resource[IO, Unit]): Result =
+    setupF[IO](f, _.unsafeRunTimed(Timeout) must beSome)
+
+  def setupF[F[_]: Concurrent: ContextShift](
+      f: (Blocker, Client[F], InetSocketAddress) => Resource[F, Unit],
+      finish: F[Unit] => Result)
+      : Result = {
+
     val r = for {
-      blocker <- Blocker[IO]
-      client <- Client[IO]
-      isa <- Resource.liftF(Client.resolve[IO](TestHost, 22, blocker))
+      blocker <- Blocker[F]
+      client <- Client[F]
+      isa <- Resource.liftF(Client.resolve[F](TestHost, 22, blocker))
       _ <- f(blocker, client, isa)
     } yield ()
 
-    r.use(_ => IO.unit).unsafeRunTimed(Timeout) must beSome
+    finish(r.use(_ => Applicative[F].unit))
   }
 }

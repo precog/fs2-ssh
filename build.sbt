@@ -29,8 +29,9 @@ lazy val core = project
       "org.apache.sshd" % "sshd-core"  % SshdVersion,
       "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
-      "org.typelevel" %% "cats-effect" % "1.4.0",
-      "co.fs2"        %% "fs2-core"    % "1.0.5",
+      "org.typelevel" %% "cats-effect"   % "1.4.0",
+      "co.fs2"        %% "fs2-core"      % "1.0.5",
+      "org.typelevel" %% "cats-mtl-core" % "0.5.0",
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
       "org.specs2" %% "specs2-core" % "4.7.0"  % Test,

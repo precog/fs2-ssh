@@ -19,20 +19,24 @@ package io.ssh
 
 import cats.effect.{Blocker, Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
+import cats.mtl.FunctorRaise
 
 import org.apache.sshd.client.SshClient
 import org.apache.sshd.client.channel.ClientChannel
 import org.apache.sshd.client.config.hosts.HostConfigEntryResolver
+import org.apache.sshd.common.SshException
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
 
-import scala.{Array, Int, None, Some}
+import scala.{Array, Int, None, Product, Serializable, Some}
 import scala.collection.JavaConverters._
+import scala.util.{Left, Right}
 
 import java.lang.{String, SuppressWarnings}
 import java.net.{InetAddress, InetSocketAddress}
 
 final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
+  import Client.Error
   import MinaFuture._
 
   private val F = Concurrent[F]
@@ -46,7 +50,8 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
       cc: ConnectionConfig,
       command: String,
       blocker: Blocker,
-      chunkSize: Int = 4096)
+      chunkSize: Int = 4096)(
+      implicit FR: FunctorRaise[F, Error])
       : Resource[F, Process[F]] = {
 
     for {
@@ -88,7 +93,20 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
           }
       }
 
-      success <- Resource.liftF(fromFuture(F.delay(session.auth())))
+      success <- Resource.liftF(fromFuture(F.delay(session.auth()))).attempt
+
+      _ <- Resource liftF {
+        success match {
+          case Left(_: SshException) =>
+            FR.raise(Error.Authentication)
+
+          case Left(e) =>
+            F.raiseError(e)
+
+          case Right(a) =>
+            F.pure(a)
+        }
+      }
 
       // TODO handle auth failure (minor problems...)
 
@@ -125,4 +143,10 @@ object Client {
       blocker: Blocker)
       : F[InetSocketAddress] =
     blocker.blockOn(Sync[F].delay(new InetSocketAddress(InetAddress.getByName(hostname), port)))
+
+  sealed trait Error extends Product with Serializable
+
+  object Error {
+    case object Authentication extends Error
+  }
 }
