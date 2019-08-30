@@ -18,54 +18,81 @@ package fs2
 package io
 package ssh
 
-import cats.effect.{Blocker, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.implicits._
 
-import net.schmizz.sshj.connection.channel.direct.Session.Command
+import org.apache.sshd.client.channel.ChannelExec
+import org.apache.sshd.common.io.{IoInputStream, IoOutputStream}
+import org.apache.sshd.common.util.buffer.ByteArrayBuffer
 
 import scala.{Array, Byte, Int, Unit}
 
-import java.lang.SuppressWarnings
+import java.io.IOException
+import java.lang.{SuppressWarnings, Throwable}
 
-@SuppressWarnings(Array("org.wartremover.warts.PublicInference"))
-final class Process[F[_]: Sync: ContextShift] private[ssh] (
-    command: Command,
-    blocker: Blocker,
+final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
+    channel: ChannelExec,
     chunkSize: Int) {
 
-  import blocker.blockOn
-  private[this] val F = Sync[F]
+  import MinaFuture.fromFuture
+
+  private val F = Concurrent[F]
 
   val stdout: Stream[F, Byte] =
-    readInputStream(
-      blockOn(F.delay(command.getInputStream)),
-      chunkSize,
-      blocker.blockingContext,
-      closeAfterUse = false)
+    Stream.force(F.delay(ioisToStream(channel.getAsyncOut(), chunkSize)))
 
   val stderr: Stream[F, Byte] =
-    readInputStream(
-      blockOn(F.delay(command.getErrorStream)),
-      chunkSize,
-      blocker.blockingContext,
-      closeAfterUse = false)
+    Stream.force(F.delay(ioisToStream(channel.getAsyncErr(), chunkSize)))
 
+  // TODO configurable EOF semantics (currently defaults to send on complete)
   val stdin: Pipe[F, Byte, Unit] =
-    writeOutputStream(
-      blockOn(F.delay(command.getOutputStream)),
-      blocker.blockingContext,
-      closeAfterUse = false)
+    ioosToSink(F.delay(channel.getAsyncIn()))
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  val join: F[Int] =
-    blockOn {
-      F delay {
-        command.join()
-
-        val status = command.getExitStatus()
-        if (status eq null)
-          0   // ???
-        else
-          status.intValue
-      }
+  val join: F[Int] = {
+    val statusF = Sync[F] delay {
+      val status = channel.getExitStatus()
+      if (status != null)
+        status.intValue
+      else
+        0
     }
+
+    MinaFuture.awaitClose[F](channel) >> statusF
+  }
+
+  // TODO I'm pretty sure this stream is ephemeral and we might miss things
+  private[this] def ioisToStream(iois: IoInputStream, chunkSize: Int): Stream[F, Byte] = {
+    val readF = fromFuture(F.delay(iois.read(new ByteArrayBuffer(chunkSize))))
+
+    Stream.eval(readF)
+      .repeat
+      .handleErrorWith {
+        case t: IOException =>
+          Stream.eval(F.delay(iois.isClosed() || iois.isClosing())) flatMap { closing =>
+            if (closing)
+              Stream.empty
+            else
+              Stream.raiseError[F](t)
+          }
+
+        case t: Throwable =>
+          Stream.raiseError[F](t)
+      }
+      .flatMap(Stream.chunk(_))
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Equals"))
+  private[this] def ioosToSink(ioosF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
+    Stream.eval(ioosF) flatMap { ioos =>
+      val written = in.chunks evalMap { chunk =>
+        val bytes = chunk.toBytes
+        val buffer = new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
+        buffer.wpos(bytes.length)
+        fromFuture(F.delay(ioos.writePacket(buffer)))
+      }
+
+      written.takeWhile(_ == true).void
+    }
+  }
 }
