@@ -77,10 +77,9 @@ for {
     servers parTraverse_ { host =>
       val ret = for {
         // the boilerplate here is... regretable
-        isa <- Client.resolve[Resource[EitherT[IO, Client.Error, ?], ?]](
-          host, 
-          22, 
-          blocker)
+        isa <- Resource.liftF(
+          EitherT.right[Client.Error](
+            Client.resolve[IO](host, 22, blocker)))
         
         _ <- client.exec(
           ConnectionConfig(
