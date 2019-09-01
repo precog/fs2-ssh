@@ -30,7 +30,7 @@ import org.specs2.mutable.Specification
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-import scala.{math, sys, Byte, None, Some, StringContext, Unit}
+import scala.{math, Byte, None, Some, StringContext, Unit}
 
 import java.lang.{RuntimeException, String, System}
 import java.net.InetSocketAddress
@@ -40,15 +40,16 @@ import java.nio.file.Paths
 // to run them locally, make sure you have things from
 // the "fs2-ssh test server" entry in 1Password
 // they will only run on Travis if you push your branch to upstream
-class ClientSpec extends Specification {
+class ClientSpec extends Specification with SshDockerService {
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
   val Timeout = 30.seconds
 
-  val TestHost = "ec2-54-205-215-42.compute-1.amazonaws.com"
-  val TestUser = "fs2-ssh"
-  val TestPassword = sys.env("FS2_SSH_TEST_PASSWORD")
-  val KeyPassword = "password"
+  val testHost = "localhost"
+  val testPort = 2222
+  val testUser = "fs2-ssh"
+  val testPassword = "password"
+  val keyPassword = "password"
 
   "ssh client" should {
     final case class WrappedError(e: Client.Error) extends RuntimeException(e.toString)
@@ -65,8 +66,8 @@ class ClientSpec extends Specification {
       client.exec(
         ConnectionConfig(
           isa,
-          TestUser,
-          Auth.Password(TestPassword)),
+          testUser,
+          Auth.Password(testPassword)),
         "whoami",
         blocker).void
     }
@@ -76,7 +77,7 @@ class ClientSpec extends Specification {
         client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
+            testUser,
             Auth.Password("bippy")),
           "whoami",
           blocker).void
@@ -87,8 +88,8 @@ class ClientSpec extends Specification {
       client.exec(
         ConnectionConfig(
           isa,
-          TestUser,
-          Auth.Key(Paths.get("keys", "nopassword"), None)),
+          testUser,
+          Auth.Key(Paths.get("core", "src", "test", "resources", "nopassword"), None)),
         "whoami",
         blocker).void
     }
@@ -97,8 +98,8 @@ class ClientSpec extends Specification {
       client.exec(
         ConnectionConfig(
           isa,
-          TestUser,
-          Auth.Key(Paths.get("keys", "password"), Some(KeyPassword))),
+          testUser,
+          Auth.Key(Paths.get("core", "src", "test", "resources", "password"), Some(keyPassword))),
         "whoami",
         blocker).void
     }
@@ -108,8 +109,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "whoami",
           blocker)
 
@@ -121,7 +122,7 @@ class ClientSpec extends Specification {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual "fs2-ssh"))
+        _ <- Resource.liftF(IO(results.trim mustEqual testUser))
       } yield ()
     }
 
@@ -130,8 +131,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "whoami >&2",
           blocker)
 
@@ -143,7 +144,7 @@ class ClientSpec extends Specification {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual "fs2-ssh"))
+        _ <- Resource.liftF(IO(results.trim mustEqual testUser))
       } yield ()
     }
 
@@ -158,8 +159,8 @@ class ClientSpec extends Specification {
           p1 <- client.exec(
             ConnectionConfig(
               isa,
-              TestUser,
-              Auth.Password(TestPassword)),
+              testUser,
+              Auth.Password(testPassword)),
             s"cat > /tmp/testing-${num}",
             blocker)
 
@@ -176,8 +177,8 @@ class ClientSpec extends Specification {
         p2 <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           s"cat /tmp/testing-${num}",
           blocker)
 
@@ -200,8 +201,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "sleep 5",
           blocker)
 
@@ -222,8 +223,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "exit 1",
           blocker)
 
@@ -244,7 +245,7 @@ class ClientSpec extends Specification {
     val r = for {
       blocker <- Blocker[F]
       client <- Client[F]
-      isa <- Resource.liftF(Client.resolve[F](TestHost, 22, blocker))
+      isa <- Resource.liftF(Client.resolve[F](testHost, testPort, blocker))
       _ <- f(blocker, client, isa)
     } yield ()
 
