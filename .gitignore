@@ -3,6 +3,7 @@
 
 target/
 .targets/
+.vagrant/
 
 # sbt-slamdata common resources
 /scripts/bumpDependentProject

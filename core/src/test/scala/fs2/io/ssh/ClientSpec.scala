@@ -45,10 +45,10 @@ class ClientSpec extends Specification {
 
   val Timeout = 30.seconds
 
-  val TestHost = "ec2-54-205-215-42.compute-1.amazonaws.com"
-  val TestUser = "fs2-ssh"
-  val TestPassword = sys.env("FS2_SSH_TEST_PASSWORD")
-  val KeyPassword = "password"
+  val testHost = sys.env.getOrElse("FS2_SSH_TEST_HOST", "ec2-54-205-215-42.compute-1.amazonaws.com")
+  val testUser = sys.env.getOrElse("FS2_SSH_TEST_USER", "fs2-ssh")
+  val testPassword = sys.env("FS2_SSH_TEST_PASSWORD")
+  val keyPassword = "password"
 
   "ssh client" should {
     final case class WrappedError(e: Client.Error) extends RuntimeException(e.toString)
@@ -65,8 +65,8 @@ class ClientSpec extends Specification {
       client.exec(
         ConnectionConfig(
           isa,
-          TestUser,
-          Auth.Password(TestPassword)),
+          testUser,
+          Auth.Password(testPassword)),
         "whoami",
         blocker).void
     }
@@ -76,7 +76,7 @@ class ClientSpec extends Specification {
         client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
+            testUser,
             Auth.Password("bippy")),
           "whoami",
           blocker).void
@@ -87,8 +87,8 @@ class ClientSpec extends Specification {
       client.exec(
         ConnectionConfig(
           isa,
-          TestUser,
-          Auth.Key(Paths.get("keys", "nopassword"), None)),
+          testUser,
+          Auth.Key(Paths.get("core", "src", "test", "resources", "nopassword"), None)),
         "whoami",
         blocker).void
     }
@@ -97,8 +97,8 @@ class ClientSpec extends Specification {
       client.exec(
         ConnectionConfig(
           isa,
-          TestUser,
-          Auth.Key(Paths.get("keys", "password"), Some(KeyPassword))),
+          testUser,
+          Auth.Key(Paths.get("core", "src", "test", "resources", "password"), Some(keyPassword))),
         "whoami",
         blocker).void
     }
@@ -108,8 +108,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "whoami",
           blocker)
 
@@ -121,7 +121,7 @@ class ClientSpec extends Specification {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual "fs2-ssh"))
+        _ <- Resource.liftF(IO(results.trim mustEqual testUser))
       } yield ()
     }
 
@@ -130,8 +130,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "whoami >&2",
           blocker)
 
@@ -143,7 +143,7 @@ class ClientSpec extends Specification {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual "fs2-ssh"))
+        _ <- Resource.liftF(IO(results.trim mustEqual testUser))
       } yield ()
     }
 
@@ -158,8 +158,8 @@ class ClientSpec extends Specification {
           p1 <- client.exec(
             ConnectionConfig(
               isa,
-              TestUser,
-              Auth.Password(TestPassword)),
+              testUser,
+              Auth.Password(testPassword)),
             s"cat > /tmp/testing-${num}",
             blocker)
 
@@ -176,8 +176,8 @@ class ClientSpec extends Specification {
         p2 <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           s"cat /tmp/testing-${num}",
           blocker)
 
@@ -200,8 +200,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "sleep 5",
           blocker)
 
@@ -222,8 +222,8 @@ class ClientSpec extends Specification {
         p <- client.exec(
           ConnectionConfig(
             isa,
-            TestUser,
-            Auth.Password(TestPassword)),
+            testUser,
+            Auth.Password(testPassword)),
           "exit 1",
           blocker)
 
@@ -244,7 +244,7 @@ class ClientSpec extends Specification {
     val r = for {
       blocker <- Blocker[F]
       client <- Client[F]
-      isa <- Resource.liftF(Client.resolve[F](TestHost, 22, blocker))
+      isa <- Resource.liftF(Client.resolve[F](testHost, 22, blocker))
       _ <- f(blocker, client, isa)
     } yield ()
 
