@@ -16,6 +16,9 @@
 
 package fs2.io.ssh
 
+import java.io.File
+
+import com.spotify.docker.client.DefaultDockerClient
 import com.whisk.docker.DockerContainer
 import com.whisk.docker.impl.spotify.DockerKitSpotify
 import com.whisk.docker.specs2.DockerTestKit
@@ -24,9 +27,14 @@ import scala.{List, Some}
 import scala.Predef.ArrowAssoc
 
 trait SshDockerService extends DockerTestKit with DockerKitSpotify {
-  val sshService = DockerContainer("fs2-ssh")
-    .withPorts(22 -> None)
+  private val dockerClient =  DefaultDockerClient.fromEnv().build()
+
+  def buildsshService(): DockerContainer ={
+    dockerClient.build(new File("core/src/test/resources").toPath, "fs2-ssh")
+    DockerContainer("fs2-ssh")
+      .withPorts(22 -> Some(2222))
+  }
 
   abstract override def dockerContainers: List[DockerContainer] =
-    sshService :: super.dockerContainers
+    buildsshService() :: super.dockerContainers
 }
