@@ -52,8 +52,7 @@ script:
 
     - |-
       if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
-        $SBT transferPublishAndTagResources;
-        TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/fs2-ssh';
+        scripts/tectonicPublishAndTag
       fi
 
 after_success:
