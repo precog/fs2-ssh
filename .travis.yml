@@ -41,7 +41,6 @@ before_install:
   - cd ..
 
 install:
-  - mkdir scripts
   - $SBT transferCommonResources
   - scripts/commonSetup
 
@@ -52,8 +51,7 @@ script:
 
     - |-
       if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
-        $SBT transferPublishAndTagResources;
-        TRAVIS_JOB_NUMBER=1 scripts/publishAndTag 'slamdata/fs2-ssh';
+        scripts/fs2SshPublishAndTag
       fi
 
 after_success:
