@@ -41,7 +41,6 @@ before_install:
   - cd ..
 
 install:
-  - mkdir scripts
   - $SBT transferCommonResources
   - scripts/commonSetup
 
