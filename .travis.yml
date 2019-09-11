@@ -51,7 +51,7 @@ script:
 
     - |-
       if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
-        scripts/tectonicPublishAndTag
+        scripts/fs2SshPublishAndTag
       fi
 
 after_success:
