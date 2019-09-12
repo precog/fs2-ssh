@@ -35,7 +35,10 @@ lazy val core = project
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
       "org.specs2" %% "specs2-core" % "4.7.0"  % Test,
-      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.12.1" % Test),
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.12.1" % Test,
+      "com.whisk" %% "docker-testkit-specs2" % "0.9.9" % Test,
+      "com.whisk" %% "docker-testkit-impl-spotify" % "0.9.9" % Test
+      ),
 
     Test / scalacOptions += "-Yrangepos",
     Test / testOptions := Seq(Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")),
