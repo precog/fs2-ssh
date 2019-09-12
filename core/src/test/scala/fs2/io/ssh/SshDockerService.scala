@@ -30,7 +30,7 @@ trait SshDockerService extends DockerTestKit with DockerKitSpotify {
   private val dockerClient =  DefaultDockerClient.fromEnv().build()
 
   def buildsshService(): DockerContainer ={
-    dockerClient.build(new File("core/src/test/resources").toPath, "fs2-ssh")
+    dockerClient.build(new File("core/src/test/resources/docker").toPath, "fs2-ssh")
     DockerContainer("fs2-ssh")
       .withPorts(22 -> Some(2222))
   }
