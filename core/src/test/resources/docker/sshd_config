@@ -1,0 +1,3 @@
+PermitRootLogin yes
+ChallengeResponseAuthentication no
+PermitRootLogin yes
