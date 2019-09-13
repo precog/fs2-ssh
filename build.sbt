@@ -10,6 +10,7 @@ scmInfo in ThisBuild := Some(ScmInfo(
 logBuffered in ThisBuild := false
 
 val SshdVersion = "2.3.0"
+val Fs2Version = "1.0.5"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
@@ -30,12 +31,15 @@ lazy val core = project
       "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
       "org.typelevel" %% "cats-effect"   % "1.4.0",
-      "co.fs2"        %% "fs2-core"      % "1.0.5",
-      "org.typelevel" %% "cats-mtl-core" % "0.7.0",
+      "co.fs2"        %% "fs2-core"      % Fs2Version,
+      "org.typelevel" %% "cats-mtl-core" % "0.5.0",
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
       "org.specs2" %% "specs2-core" % "4.7.0"  % Test,
-      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.12.1" % Test),
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.12.1" % Test,
+      "com.whisk" %% "docker-testkit-specs2" % "0.9.9" % Test,
+      "com.whisk" %% "docker-testkit-impl-spotify" % "0.9.9" % Test,
+      "co.fs2" %% "fs2-io" % Fs2Version % Test),
 
     Test / scalacOptions += "-Yrangepos",
     Test / testOptions := Seq(Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")),
