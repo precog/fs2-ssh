@@ -28,8 +28,6 @@ import cats.mtl.instances.all._
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
-import scodec.bits.ByteVector
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
