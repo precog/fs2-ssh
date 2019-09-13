@@ -16,35 +16,52 @@
 
 package fs2.io.ssh
 
+import cats.implicits._
+
 import org.apache.sshd.common.NamedResource
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.AbstractKeyPairProvider
 import org.apache.sshd.common.util.security.SecurityUtils
 import org.apache.sshd.common.session.SessionContext
 
-import scala.{Array, Byte}
+import scala.{Array, Byte, Option, Some, None}
 
 import java.io.ByteArrayInputStream
-import java.lang.Iterable
+import java.lang.{Iterable, String, SuppressWarnings}
 import java.security.KeyPair
 
 private[ssh] final class ByteArrayKeyPairProvider private (
-    bytes: Array[Byte])
+    bytes: Array[Byte],
+    maybePass: Option[String])
     extends AbstractKeyPairProvider {
 
+  private[this] val BytesMagicKey = "<bytes>"
+
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
   def loadKeys(session: SessionContext): Iterable[KeyPair] = {
     val bis = new ByteArrayInputStream(bytes)
 
     SecurityUtils.loadKeyPairIdentities(
       session,
-      NamedResource.ofName("<bytes>"),
+      NamedResource.ofName(BytesMagicKey),
       bis,
-      FilePasswordProvider.EMPTY)
+      maybePass match {
+        case Some(password) =>
+          { (session, key, _) =>
+            if (key.getName() === BytesMagicKey)
+              password
+            else
+              null
+          }
+
+        case None =>
+          FilePasswordProvider.EMPTY
+      })
   }
 }
 
 object ByteArrayKeyPairProvider {
 
-  def apply(bytes: Array[Byte]): ByteArrayKeyPairProvider =
-    new ByteArrayKeyPairProvider(bytes)
+  def apply(bytes: Array[Byte], maybePass: Option[String]): ByteArrayKeyPairProvider =
+    new ByteArrayKeyPairProvider(bytes, maybePass)
 }

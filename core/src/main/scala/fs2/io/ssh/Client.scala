@@ -92,8 +92,8 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
             } yield ()
           }
 
-        case Auth.KeyBytes(bytes) =>
-          val provider = ByteArrayKeyPairProvider(bytes)
+        case Auth.KeyBytes(bytes, maybePass) =>
+          val provider = ByteArrayKeyPairProvider(bytes, maybePass)
 
           Resource liftF {
             for {

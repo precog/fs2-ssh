@@ -97,7 +97,7 @@ for {
 } yield ()
 ```
 
-(there is an analogous `Auth.KeyBytes` case if you happen to have the private key already in memory; note that this case does not support password protection)
+(there is an analogous `Auth.KeyBytes` case if you happen to have the private key already in memory)
 
 The only limitation on the above is really memory. Due to the fact that the client is entirely asynchronous, no threads will be retained to manage active connections, and so it's really not that absurd to open millions of these things. Note that if you would *like* to do this in a memory-incremental fashion, you probably want to use the `Stream.resource` constructor and `parJoinUnbounded` in fs2, rather than going through `cats.Parallel` (as in the above), but this is just a simple example.
 

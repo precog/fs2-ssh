@@ -116,7 +116,7 @@ class ClientSpec extends Specification with SshDockerService {
           ConnectionConfig(
             isa,
             testUser,
-            Auth.KeyBytes(key)),
+            Auth.KeyBytes(key, None)),
           "whoami",
           blocker)
       } yield ()
@@ -132,6 +132,30 @@ class ClientSpec extends Specification with SshDockerService {
             Some(keyPassword))),
         "whoami",
         blocker).void
+    }
+
+    "authenticate with a protected key in memory" in setup { (blocker, client, isa) =>
+      for {
+        keyChunks <-
+          file.readAll[IO](
+            Paths.get("core", "src", "test", "resources", "password"),
+            blocker.blockingContext,
+            4096)
+          .chunks
+          .compile
+          .resource
+          .to[Seq]
+
+        key = Chunk.concat(keyChunks).toArray[Byte]
+
+        _ <- client.exec(
+          ConnectionConfig(
+            isa,
+            testUser,
+            Auth.KeyBytes(key, Some(keyPassword))),
+          "whoami",
+          blocker)
+      } yield ()
     }
 
     "read from stdout" in setup { (blocker, client, isa) =>

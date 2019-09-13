@@ -31,5 +31,6 @@ object Auth {
   @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
   final case class KeyFile(privateKey: Path, password: Option[String] = None) extends Auth
 
-  final case class KeyBytes(privateKey: Array[Byte]) extends Auth
+  @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
+  final case class KeyBytes(privateKey: Array[Byte], password: Option[String] = None) extends Auth
 }
