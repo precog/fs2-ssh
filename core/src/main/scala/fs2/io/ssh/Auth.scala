@@ -31,6 +31,9 @@ object Auth {
   @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
   final case class KeyFile(privateKey: Path, password: Option[String] = None) extends Auth
 
-  @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
+  @SuppressWarnings(
+    Array(
+      "org.wartremover.warts.DefaultArguments",
+      "org.wartremover.warts.ArrayEquals"))   // I hate wartremover...
   final case class KeyBytes(privateKey: Array[Byte], password: Option[String] = None) extends Auth
 }
