@@ -64,7 +64,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
         case Auth.Password(text) =>
           Resource.liftF(F.delay(session.addPasswordIdentity(text)))
 
-        case Auth.Key(path0, maybePass) =>
+        case Auth.KeyFile(path0, maybePass) =>
           Resource liftF {
             for {
               path <- blocker.blockOn(F.delay(path0.toAbsolutePath()))
@@ -86,6 +86,18 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
               }
 
               pairs <- blocker.blockOn(F.delay(provider.loadKeys(session)))
+              _ <- pairs.asScala.toList traverse_ { kp =>
+                F.delay(session.addPublicKeyIdentity(kp))
+              }
+            } yield ()
+          }
+
+        case Auth.KeyBytes(bytes) =>
+          val provider = ByteArrayKeyPairProvider(bytes)
+
+          Resource liftF {
+            for {
+              pairs <- F.delay(provider.loadKeys(session))
               _ <- pairs.asScala.toList traverse_ { kp =>
                 F.delay(session.addPublicKeyIdentity(kp))
               }

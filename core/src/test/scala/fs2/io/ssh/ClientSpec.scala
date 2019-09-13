@@ -15,7 +15,8 @@
  */
 
 package fs2
-package io.ssh
+package io
+package ssh
 
 import cats.Applicative
 import cats.data.EitherT
@@ -27,10 +28,13 @@ import cats.mtl.instances.all._
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
+import scodec.bits.ByteVector
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 import scala.{math, Byte, None, Some, StringContext, Unit}
+import scala.collection.immutable.Seq
 
 import java.lang.{RuntimeException, String, System}
 import java.net.InetSocketAddress
@@ -89,9 +93,33 @@ class ClientSpec extends Specification with SshDockerService {
         ConnectionConfig(
           isa,
           testUser,
-          Auth.Key(Paths.get("core", "src", "test", "resources", "nopassword"), None)),
+          Auth.KeyFile(Paths.get("core", "src", "test", "resources", "nopassword"), None)),
         "whoami",
         blocker).void
+    }
+
+    "authenticate with an unprotected key in memory" in setup { (blocker, client, isa) =>
+      for {
+        keyChunks <-
+          file.readAll[IO](
+            Paths.get("core", "src", "test", "resources", "nopassword"),
+            blocker.blockingContext,
+            4096)
+          .chunks
+          .compile
+          .resource
+          .to[Seq]
+
+        key = Chunk.concat(keyChunks).toArray[Byte]
+
+        _ <- client.exec(
+          ConnectionConfig(
+            isa,
+            testUser,
+            Auth.KeyBytes(key)),
+          "whoami",
+          blocker)
+      } yield ()
     }
 
     "authenticate with a protected key" in setup { (blocker, client, isa) =>
@@ -99,7 +127,9 @@ class ClientSpec extends Specification with SshDockerService {
         ConnectionConfig(
           isa,
           testUser,
-          Auth.Key(Paths.get("core", "src", "test", "resources", "password"), Some(keyPassword))),
+          Auth.KeyFile(
+            Paths.get("core", "src", "test", "resources", "password"),
+            Some(keyPassword))),
         "whoami",
         blocker).void
     }

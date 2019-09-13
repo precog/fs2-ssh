@@ -17,7 +17,7 @@
 package fs2
 package io.ssh
 
-import scala.{Array, Option, None, Product, Serializable}
+import scala.{Array, Byte, Option, None, Product, Serializable}
 
 import java.lang.{String, SuppressWarnings}
 import java.nio.file.Path
@@ -29,5 +29,7 @@ object Auth {
   final case class Password(text: String) extends Auth
 
   @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
-  final case class Key(privateKey: Path, password: Option[String] = None) extends Auth
+  final case class KeyFile(privateKey: Path, password: Option[String] = None) extends Auth
+
+  final case class KeyBytes(privateKey: Array[Byte]) extends Auth
 }
