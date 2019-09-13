@@ -30,6 +30,7 @@ import java.io.ByteArrayInputStream
 import java.lang.{Iterable, String, SuppressWarnings}
 import java.security.KeyPair
 
+// why tf doesn't this exist in mina already??
 private[ssh] final class ByteArrayKeyPairProvider private (
     bytes: Array[Byte],
     maybePass: Option[String])
