@@ -92,7 +92,10 @@ final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
         fromFuture(F.delay(ioos.writePacket(buffer)))
       }
 
-      written.takeWhile(_ == true).void
+      written.takeWhile(_ == true)
+        .void
+        .onComplete(
+          Stream.eval_(fromFuture(F.delay(ioos.close(false)))))
     }
   }
 }
