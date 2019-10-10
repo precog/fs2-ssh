@@ -32,7 +32,7 @@ lazy val core = project
 
       "org.typelevel" %% "cats-effect"   % "2.0.0",
       "co.fs2"        %% "fs2-core"      % Fs2Version,
-      "org.typelevel" %% "cats-mtl-core" % "0.5.0",
+      "org.typelevel" %% "cats-mtl-core" % "0.7.0",
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
       "org.specs2" %% "specs2-core" % "4.7.1"  % Test,
