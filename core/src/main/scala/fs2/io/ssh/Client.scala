@@ -24,6 +24,7 @@ import cats.mtl.FunctorRaise
 import org.apache.sshd.client.SshClient
 import org.apache.sshd.client.channel.ClientChannel
 import org.apache.sshd.client.config.hosts.HostConfigEntryResolver
+import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.SshException
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
@@ -43,9 +44,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
 
   @SuppressWarnings(
     Array(
-      "org.wartremover.warts.DefaultArguments",
-      "org.wartremover.warts.Null",
-      "org.wartremover.warts.ToString"))
+      "org.wartremover.warts.DefaultArguments"))
   def exec(
       cc: ConnectionConfig,
       command: String,
@@ -53,6 +52,30 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
       chunkSize: Int = 4096)(
       implicit FR: FunctorRaise[F, Error])
       : Resource[F, Process[F]] = {
+
+    for {
+      session <- this.session(cc, blocker)
+
+      channel <- Resource.make(
+        for {
+          channel <- F.delay(session.createExecChannel(command))
+          _ <- F.delay(channel.setStreaming(ClientChannel.Streaming.Async))
+          opened <- fromFuture(F.delay(channel.open()))
+          // TODO handle failure opening
+        } yield channel)(
+        channel => fromFuture(F.delay(channel.close(false))).void)
+    } yield new Process[F](channel, chunkSize)
+  }
+
+  @SuppressWarnings(
+    Array(
+      "org.wartremover.warts.Null",
+      "org.wartremover.warts.ToString"))
+  def session(
+      cc: ConnectionConfig,
+      blocker: Blocker)(
+      implicit FR: FunctorRaise[F, Error])
+      : Resource[F, ClientSession] = {
 
     for {
       session <-
@@ -121,16 +144,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
       }
 
       // TODO handle auth failure (minor problems...)
-
-      channel <- Resource.make(
-        for {
-          channel <- F.delay(session.createExecChannel(command))
-          _ <- F.delay(channel.setStreaming(ClientChannel.Streaming.Async))
-          opened <- fromFuture(F.delay(channel.open()))
-          // TODO handle failure opening
-        } yield channel)(
-        channel => fromFuture(F.delay(channel.close(false))).void)
-    } yield new Process[F](channel, chunkSize)
+    } yield session
   }
 }
 
