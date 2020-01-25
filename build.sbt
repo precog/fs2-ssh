@@ -35,7 +35,7 @@ lazy val core = project
       "org.typelevel" %% "cats-mtl-core" % "0.7.0",
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
-      "org.specs2" %% "specs2-core" % "4.8.1"  % Test,
+      "org.specs2" %% "specs2-core" % "4.8.3"  % Test,
       "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.13.0" % Test,
       "com.whisk" %% "docker-testkit-specs2" % "0.9.9" % Test,
       "com.whisk" %% "docker-testkit-impl-spotify" % "0.9.9" % Test,
