@@ -101,7 +101,7 @@ class ClientSpec extends Specification with SshDockerService {
         keyChunks <-
           file.readAll[IO](
             Paths.get("core", "src", "test", "resources", "nopassword"),
-            blocker.blockingContext,
+            blocker,
             4096)
           .chunks
           .compile
@@ -137,7 +137,7 @@ class ClientSpec extends Specification with SshDockerService {
         keyChunks <-
           file.readAll[IO](
             Paths.get("core", "src", "test", "resources", "password"),
-            blocker.blockingContext,
+            blocker,
             4096)
           .chunks
           .compile
