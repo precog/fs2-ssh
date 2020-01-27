@@ -106,7 +106,7 @@ class ClientSpec extends Specification with SshDockerService {
           .chunks
           .compile
           .resource
-          .to[Seq]
+          .to(Seq)
 
         key = Chunk.concat(keyChunks).toArray[Byte]
 
@@ -142,7 +142,7 @@ class ClientSpec extends Specification with SshDockerService {
           .chunks
           .compile
           .resource
-          .to[Seq]
+          .to(Seq)
 
         key = Chunk.concat(keyChunks).toArray[Byte]
 
