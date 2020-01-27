@@ -10,7 +10,7 @@ scmInfo in ThisBuild := Some(ScmInfo(
 logBuffered in ThisBuild := false
 
 val SshdVersion = "2.3.0"
-val Fs2Version = "2.1.0"
+val Fs2Version = "2.2.1"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
