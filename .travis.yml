@@ -43,10 +43,11 @@ script:
         if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
           TRAVIS_JOB_NUMBER=1 scripts/fs2SshPublishAndTag
         fi
+
+        scripts/checkAndAutoMerge
       fi
 
 after_success:
-  - scripts/checkAndAutoMerge
   - scripts/discordTravisPost success https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
 
 after_failure:
