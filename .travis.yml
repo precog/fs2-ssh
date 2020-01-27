@@ -1,5 +1,9 @@
 language: scala
-scala: 2.12.10
+
+scala:
+  - 2.13.1
+  - 2.12.10
+
 jdk: openjdk8
 
 services:
@@ -35,12 +39,15 @@ script:
     - $SBT ++$TRAVIS_SCALA_VERSION test
 
     - |-
-      if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
-        scripts/fs2SshPublishAndTag
+      if [[ "$TRAVIS_SCALA_VERSION" =~ 2.12 ]]; then
+        if [ $TRAVIS_PULL_REQUEST == "false" ] && [[ "$TRAVIS_BRANCH" =~ backport/v.*|master ]]; then
+          TRAVIS_JOB_NUMBER=1 scripts/fs2SshPublishAndTag
+        fi
+
+        scripts/checkAndAutoMerge
       fi
 
 after_success:
-  - scripts/checkAndAutoMerge
   - scripts/discordTravisPost success https://discordapp.com/api/webhooks/$DISCORD_WEBHOOK_TOKENS
 
 after_failure:

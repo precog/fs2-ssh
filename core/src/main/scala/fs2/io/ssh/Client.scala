@@ -29,13 +29,14 @@ import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
 
 import scala.{Array, Int, None, Product, Serializable, Some}
-import scala.collection.JavaConverters._
 import scala.util.{Left, Right}
 
 import java.lang.{String, SuppressWarnings}
 import java.net.{InetAddress, InetSocketAddress}
 
 final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
+  import CompatConverters.All._
+
   import Client.Error
   import MinaFuture._
 

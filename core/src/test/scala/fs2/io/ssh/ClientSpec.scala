@@ -216,7 +216,7 @@ class ClientSpec extends Specification with SshDockerService {
             s"cat > /tmp/testing-${num}",
             blocker)
 
-          _ <- Stream(data.getBytes: _*)
+          _ <- Stream.chunk(Chunk.bytes(data.getBytes))
               .through(p1.stdin)
               .compile
               .resource
