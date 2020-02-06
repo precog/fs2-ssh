@@ -29,7 +29,7 @@ import org.apache.sshd.common.SshException
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
 
-import scala.{Array, Int, None, Product, Serializable, Some}
+import scala.{Array, Boolean, Int, None, Product, Serializable, Some}
 import scala.util.{Left, Right}
 
 import java.lang.{String, SuppressWarnings}
@@ -50,7 +50,8 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
       cc: ConnectionConfig,
       command: String,
       blocker: Blocker,
-      chunkSize: Int = 4096)(
+      chunkSize: Int = 4096,
+      closeImmediately: Boolean = false)(
       implicit FR: FunctorRaise[F, Error])
       : Resource[F, Process[F]] = {
 
@@ -64,7 +65,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
           opened <- fromFuture(F.delay(channel.open()))
           // TODO handle failure opening
         } yield channel)(
-        channel => fromFuture(F.delay(channel.close(false))).void)
+        channel => fromFuture(F.delay(channel.close(closeImmediately))).void)
     } yield new Process[F](channel, chunkSize)
   }
 
