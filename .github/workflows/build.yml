@@ -58,6 +58,8 @@ jobs:
           java-version: ${{ env.JDK }}
       - name: Setup Git Actor
         run: git config github.actor slamdata-bot
+      - name: Create scripts dir
+        run: mkdir ./scripts
       - name: Transfer common resources
         run: $SBT transferCommonResources
       - name: Export common secrets
@@ -81,8 +83,6 @@ jobs:
         uses: actions/download-artifact@v1
         with:
           name: target
-      - name: Setup Git Actor
-        run: git config github.actor slamdata-bot
       - name: Set up JDK ${{ env.JDK }}
         uses: actions/setup-java@v1
         with:
@@ -91,6 +91,10 @@ jobs:
         uses: actions/setup-ruby@v1
         with:
           ruby-version: '2.6'
+      - name: Setup Git Actor
+        run: git config github.actor slamdata-bot
+      - name: Create scripts dir
+        run: mkdir ./scripts
       - name: Install common resources
         run: $SBT transferCommonResources
       - name: Export common secrets
