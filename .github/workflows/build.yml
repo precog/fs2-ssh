@@ -60,6 +60,8 @@ jobs:
         run: git config github.actor slamdata-bot
       - name: Transfer common resources
         run: $SBT transferCommonResources
+      - name: Export common secrets
+        run: $SBT exportSecretsForActions
       - name: Common setup
         run: ./scripts/core/commonSetup
       - name: Run publish and tag
@@ -81,12 +83,18 @@ jobs:
           name: target
       - name: Setup Git Actor
         run: git config github.actor slamdata-bot
-      - name: Install common resources
-        run: ./sbt transferCommonResources
+      - name: Set up JDK ${{ env.JDK }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ env.JDK }}
       - name: Install ruby
         uses: actions/setup-ruby@v1
         with:
           ruby-version: '2.6'
+      - name: Install common resources
+        run: $SBT transferCommonResources
+      - name: Export common secrets
+        run: $SBT exportSecretsForActions
       - name: Common setup
         run: ./scripts/core/commonSetup
       - name: Set env vars
