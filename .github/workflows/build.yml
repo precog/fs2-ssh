@@ -1,4 +1,4 @@
-name: fs2sshbuild
+name: build
 
 on:
   pull_request:
@@ -34,10 +34,10 @@ jobs:
       - name: Upload target
         uses: actions/upload-artifact@v1
         with:
-          name: target-${{ matrix.scala }}
-          path: target
+          name: working-dir-${{ matrix.scala }}
+          path: .
 
-  publishandtag:
+  publish-and-tag:
     name: Publish and Tag
     needs: [build]
     if: github.event_name != 'pull_request' && (contains(github.head_ref, 'backport/v.*') || contains(github.head_ref, 'master'))
@@ -51,7 +51,7 @@ jobs:
       - name: Download target artifacts
         uses: actions/download-artifact@v1
         with:
-          name: target-${{ matrix.scala }}
+          name: working-dir-${{ matrix.scala }}
       - name: Set up JDK ${{ env.JDK }}
         uses: actions/setup-java@v1
         with:
@@ -62,6 +62,8 @@ jobs:
         run: mkdir ./scripts
       - name: Transfer common resources
         run: $SBT transferCommonResources
+      - name: Common setup
+        run: ./scripts/commonSetup
       - name: Export common secrets
         run: $SBT exportSecretsForActions
       - name: Common setup
@@ -69,7 +71,7 @@ jobs:
       - name: Run publish and tag
         run: ./scripts/fs2SshPublishAndTag
 
-  commonResources:
+  auto-merge:
     name: Auto Merge
     if: github.event_name == 'pull_request' && contains(github.head_ref, 'version-bump')
     needs: [build]
