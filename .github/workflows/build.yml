@@ -11,6 +11,7 @@ env:
   JDK: 1.8
   REPO_SLUG: ${{ github.repository }}
   ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
+  GITHUB_ACTOR: slamdata-bot
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
