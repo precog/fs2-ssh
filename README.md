@@ -1,4 +1,4 @@
-# fs2-ssh [![Build Status](https://travis-ci.com/slamdata/fs2-ssh.svg?branch=master)](https://travis-ci.com/slamdata/fs2-ssh) [![Bintray](https://img.shields.io/bintray/v/slamdata-inc/maven-public/fs2-ssh.svg)](https://bintray.com/slamdata-inc/maven-public/fs2-ssh) [![Discord](https://img.shields.io/discord/373302030460125185.svg?logo=discord)](https://discord.gg/QNjwCg6)
+# fs2-ssh [![Discord](https://img.shields.io/discord/373302030460125185.svg?logo=discord)](https://discord.gg/QNjwCg6)
 
 A lightweight wrapper around [Apache SSHD](https://mina.apache.org/sshd-project/). The primary purpose of this library is to provide a resource-safe, functional, thread-pool-safe API for SSH within the [Cats Effect](https://github.com/typelevel/cats-effect) ecosystem.
 
@@ -7,7 +7,7 @@ At present, only limited client functionality is offered, but future functionali
 ## Usage
 
 ```sbt
-libraryDependencies += "com.slamdata" %% "fs2-ssh" % <version>
+libraryDependencies += "com.precog" %% "fs2-ssh" % <version>
 ```
 
 fs2-ssh is currently published for Scala 2.12. It depends on Cats Effect 1.4.0, Cats MTL 0.5.0, fs2 1.0.5, SSHD 2.3.0, and Netty 4.1.39.
@@ -115,7 +115,7 @@ It's also worth noting that SSHD's Netty usage seems to be somewhat naive, and i
 
 ## Contributing
 
-Apache License v2. Don't format code bizarrely. Don't force push to PRs. You know the drill. The weird and unfortunate thing is that external contributors will not be able to run the "unit" tests (which are really integration tests) without private credentials. The reason for this is the tests actually shell into a server hosted in EC2 (generously sponsored by [SlamData](https://github.com/slamdata)) in order to test that the client functionality is compatible with OpenSSH. This is all well and good, but the credentials cannot be made public for reasons that likely involve bitcoin mining and botnets.
+Apache License v2. Don't format code bizarrely. Don't force push to PRs. You know the drill. The weird and unfortunate thing is that external contributors will not be able to run the "unit" tests (which are really integration tests) without private credentials. The reason for this is the tests actually shell into a server hosted in EC2 (generously sponsored by [Precog](https://github.com/precog)) in order to test that the client functionality is compatible with OpenSSH. This is all well and good, but the credentials cannot be made public for reasons that likely involve bitcoin mining and botnets.
 
 Travis *does* run the integration tests, but only on branches which are pushed to the upstream fork. This means that third-party PRs will never build successfully in CI. Sorry. 😔
 
