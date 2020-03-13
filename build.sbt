@@ -4,11 +4,13 @@ import scala.collection.Seq
 ThisBuild / crossScalaVersions := Seq("2.12.10", "2.13.1")
 ThisBuild / scalaVersion := "2.12.10"
 
-homepage in ThisBuild := Some(url("https://github.com/slamdata/fs2-ssh"))
+ThisBuild / githubRepository := "fs2-ssh"
+
+homepage in ThisBuild := Some(url("https://github.com/precog/fs2-ssh"))
 
 scmInfo in ThisBuild := Some(ScmInfo(
-  url("https://github.com/slamdata/fs2-ssh"),
-  "scm:git@github.com:slamdata/fs2-ssh.git"))
+  url("https://github.com/precog/fs2-ssh"),
+  "scm:git@github.com:precog/fs2-ssh.git"))
 
 logBuffered in ThisBuild := false
 
@@ -23,7 +25,6 @@ lazy val root = project
   .in(file("."))
   .settings(noPublishSettings)
   .aggregate(core)
-  .enablePlugins(AutomateHeaderPlugin)
 
 lazy val core = project
   .in(file("core"))
@@ -69,4 +70,3 @@ lazy val core = project
       | val auth = Auth.Key(Paths.get("id_rsa_testing"), None)""".stripMargin,
 
     Compile / console / scalacOptions += "-Ydelambdafy:inline")
-  .enablePlugins(AutomateHeaderPlugin)
