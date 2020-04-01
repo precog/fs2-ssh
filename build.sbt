@@ -2,7 +2,7 @@ import sbt.TestFrameworks.Specs2
 import scala.collection.Seq
 
 ThisBuild / crossScalaVersions := Seq("2.12.10", "2.13.1")
-ThisBuild / scalaVersion := "2.12.10"
+ThisBuild / scalaVersion := (ThisBuild / crossScalaVersions).value.head
 
 ThisBuild / githubRepository := "fs2-ssh"
 
