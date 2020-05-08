@@ -34,7 +34,7 @@ lazy val core = project
       "org.apache.sshd" % "sshd-core"  % SshdVersion,
       "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
-      "org.typelevel" %% "cats-effect"   % "2.0.0",
+      "org.typelevel" %% "cats-effect"   % "2.1.2",
       "co.fs2"        %% "fs2-core"      % Fs2Version,
       "org.typelevel" %% "cats-mtl-core" % "0.7.0",
 
