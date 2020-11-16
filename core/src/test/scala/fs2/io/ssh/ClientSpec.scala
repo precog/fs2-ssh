@@ -204,7 +204,7 @@ class ClientSpec extends Specification with SshDockerService {
       val data = "Hello, It's me, I've been wondering if after all these years you'd like to meet"
 
       for {
-        num <- Resource.liftF(IO(math.abs(math.random * 100000)))
+        num <- Resource.liftF(IO(math.abs(math.random() * 100000)))
 
         // we need to nest the resource here because we want to explicitly close the connection
         r = for {
