@@ -17,31 +17,28 @@
 package fs2
 package io.ssh
 
-import cats.effect.{Blocker, Concurrent, ContextShift, Resource, Sync}
+import cats.effect.kernel.Async
+import cats.effect.Resource
 import cats.implicits._
-import cats.mtl.FunctorRaise
-
+import cats.mtl.Raise
 import org.apache.sshd.client.SshClient
-import org.apache.sshd.client.channel.ClientChannel
 import org.apache.sshd.client.config.hosts.HostConfigEntryResolver
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.SshException
+import org.apache.sshd.common.channel.StreamingChannel
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
-
-import scala.{Array, Int, None, Product, Serializable, Some}
+import org.apache.sshd.common.util.net.SshdSocketAddress
+import scala.{Array, Int, None, Product, Serializable, Some, Unit}
 import scala.util.{Left, Right}
-
 import java.lang.{String, SuppressWarnings}
 import java.net.{InetAddress, InetSocketAddress}
 
-final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
+final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
   import CompatConverters.All._
 
   import Client.Error
   import MinaFuture._
-
-  private val F = Concurrent[F]
 
   @SuppressWarnings(
     Array(
@@ -49,18 +46,17 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
   def exec(
       cc: ConnectionConfig,
       command: String,
-      blocker: Blocker,
       chunkSize: Int = 4096)(
-      implicit FR: FunctorRaise[F, Error])
+      implicit FR: Raise[F, Error])
       : Resource[F, Process[F]] = {
 
     for {
-      session <- this.session(cc, blocker)
+      session <- this.session(cc)
 
       channel <- Resource.make(
         for {
           channel <- F.delay(session.createExecChannel(command))
-          _ <- F.delay(channel.setStreaming(ClientChannel.Streaming.Async))
+          _ <- F.delay(channel.setStreaming(StreamingChannel.Streaming.Async))
           opened <- fromFuture(F.delay(channel.open()))
           // TODO handle failure opening
         } yield channel)(
@@ -68,14 +64,24 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
     } yield new Process[F](channel, chunkSize)
   }
 
+  def portForward(cc: ConnectionConfig,
+                  local: InetSocketAddress,
+                  remote: InetSocketAddress)(
+                   implicit FR: Raise[F, Error]): Resource[F, Unit] = {
+    this.session(cc).flatMap { clientSession =>
+      val l = SshdSocketAddress.toSshdSocketAddress(local)
+      val r = SshdSocketAddress.toSshdSocketAddress(remote)
+      Resource.make(F.delay(clientSession.startLocalPortForwarding(l, r)))(address => F.delay(clientSession.stopLocalPortForwarding(address)))
+    }.void
+  }
+
   @SuppressWarnings(
     Array(
       "org.wartremover.warts.Null",
       "org.wartremover.warts.ToString"))
   def session(
-      cc: ConnectionConfig,
-      blocker: Blocker)(
-      implicit FR: FunctorRaise[F, Error])
+      cc: ConnectionConfig)(
+      implicit FR: Raise[F, Error])
       : Resource[F, ClientSession] = {
 
     for {
@@ -86,12 +92,12 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
 
       _ <- cc.auth match {
         case Auth.Password(text) =>
-          Resource.liftF(F.delay(session.addPasswordIdentity(text)))
+          Resource.eval(F.delay(session.addPasswordIdentity(text)))
 
         case Auth.KeyFile(path0, maybePass) =>
-          Resource liftF {
+          Resource eval {
             for {
-              path <- blocker.blockOn(F.delay(path0.toAbsolutePath()))
+              path <- F.blocking(path0.toAbsolutePath())
               provider <- F.delay(new FileKeyPairProvider(path))
 
               _ <- maybePass match {
@@ -109,7 +115,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
                   F.delay(provider.setPasswordFinder(FilePasswordProvider.EMPTY))
               }
 
-              pairs <- blocker.blockOn(F.delay(provider.loadKeys(session)))
+              pairs <- F.blocking(provider.loadKeys(session))
               _ <- pairs.asScala.toList traverse_ { kp =>
                 F.delay(session.addPublicKeyIdentity(kp))
               }
@@ -119,7 +125,7 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
         case Auth.KeyBytes(bytes, maybePass) =>
           val provider = ByteArrayKeyPairProvider(bytes, maybePass)
 
-          Resource liftF {
+          Resource eval {
             for {
               pairs <- F.delay(provider.loadKeys(session))
               _ <- pairs.asScala.toList traverse_ { kp =>
@@ -129,9 +135,9 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
           }
       }
 
-      success <- Resource.liftF(fromFuture(F.delay(session.auth()))).attempt
+      success <- Resource.eval(fromFuture(F.delay(session.auth()))).attempt
 
-      _ <- Resource liftF {
+      _ <- Resource eval {
         success match {
           case Left(_: SshException) =>
             FR.raise(Error.Authentication)
@@ -151,8 +157,8 @@ final class Client[F[_]: Concurrent: ContextShift] private (client: SshClient) {
 
 object Client {
 
-  def apply[F[_]: Concurrent: ContextShift]: Resource[F, Client[F]] = {
-    val makeF = Sync[F] delay {
+  def apply[F[_]: Async]: Resource[F, Client[F]] = {
+    val makeF = Async[F] delay {
       val client = SshClient.setUpDefaultClient()
       client.setHostConfigEntryResolver(HostConfigEntryResolver.EMPTY)
 
@@ -160,16 +166,15 @@ object Client {
       client
     }
 
-    Resource.make(makeF)(c => Sync[F].delay(c.stop())).map(new Client[F](_))
+    Resource.make(makeF)(c => Async[F].delay(c.stop())).map(new Client[F](_))
   }
 
   // convenience function that really should live elsewhere
-  def resolve[F[_]: Sync: ContextShift](
+  def resolve[F[_]: Async](
       hostname: String,
-      port: Int,
-      blocker: Blocker)
+      port: Int)
       : F[InetSocketAddress] =
-    blocker.blockOn(Sync[F].delay(new InetSocketAddress(InetAddress.getByName(hostname), port)))
+    Async[F].blocking(new InetSocketAddress(InetAddress.getByName(hostname), port))
 
   sealed trait Error extends Product with Serializable
 

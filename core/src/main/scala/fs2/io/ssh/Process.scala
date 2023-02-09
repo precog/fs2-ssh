@@ -18,25 +18,20 @@ package fs2
 package io
 package ssh
 
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.kernel.Async
 import cats.implicits._
-
 import org.apache.sshd.client.channel.ChannelExec
 import org.apache.sshd.common.io.{IoInputStream, IoOutputStream}
 import org.apache.sshd.common.util.buffer.ByteArrayBuffer
-
 import scala.{Array, Byte, Int, Unit}
-
 import java.io.IOException
 import java.lang.{SuppressWarnings, Throwable}
 
-final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
+final class Process[F[_]] private[ssh] (
     channel: ChannelExec,
-    chunkSize: Int) {
+    chunkSize: Int)(implicit F: Async[F]) {
 
   import MinaFuture.fromFuture
-
-  private val F = Concurrent[F]
 
   val stdout: Stream[F, Byte] =
     Stream.force(F.delay(ioisToStream(channel.getAsyncOut(), chunkSize)))
@@ -50,7 +45,7 @@ final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
   val join: F[Int] = {
-    val statusF = Sync[F] delay {
+    val statusF = Async[F] delay {
       val status = channel.getExitStatus()
       if (status != null)
         status.intValue
@@ -86,16 +81,16 @@ final class Process[F[_]: Concurrent: ContextShift] private[ssh] (
   private[this] def ioosToSink(ioosF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
     Stream.eval(ioosF) flatMap { ioos =>
       val written = in.chunks evalMap { chunk =>
-        val bytes = chunk.toBytes
-        val buffer = new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
+        val bytes = chunk.toArray
+        val buffer = new ByteArrayBuffer(bytes, 0, bytes.length)
         buffer.wpos(bytes.length)
-        fromFuture(F.delay(ioos.writePacket(buffer)))
+        fromFuture(F.delay(ioos.writeBuffer(buffer)))
       }
 
       written.takeWhile(_ == true)
         .void
         .onComplete(
-          Stream.eval_(fromFuture(F.delay(ioos.close(false)))))
+          Stream.exec(fromFuture(F.delay(ioos.close(false))).void))
     }
   }
 }
