@@ -18,7 +18,7 @@ package fs2
 package io
 package ssh
 
-import cats.effect.kernel.Async
+import cats.effect.Async
 import cats.implicits._
 import org.apache.sshd.client.channel.ChannelExec
 import org.apache.sshd.common.io.{IoInputStream, IoOutputStream}
@@ -81,9 +81,9 @@ final class Process[F[_]] private[ssh] (
   private[this] def ioosToSink(ioosF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
     Stream.eval(ioosF) flatMap { ioos =>
       val written = in.chunks evalMap { chunk =>
-        val bytes = chunk.toArray
-        val buffer = new ByteArrayBuffer(bytes, 0, bytes.length)
-        buffer.wpos(bytes.length)
+        // This results in fewer allocations when Chunk is already backed by an Array[Byte].
+        val bytes = chunk.toArraySlice
+        val buffer = new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
         fromFuture(F.delay(ioos.writeBuffer(buffer)))
       }
 

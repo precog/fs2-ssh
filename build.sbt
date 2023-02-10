@@ -43,10 +43,12 @@ lazy val core = project
       "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.19.0" % Test,
       "com.whisk" %% "docker-testkit-specs2" % "0.9.9" % Test,
       "com.whisk" %% "docker-testkit-impl-spotify" % "0.9.9" % Test,
+      "org.http4s" %% "http4s-okhttp-client" % "0.23.11" % Test,
       "co.fs2" %% "fs2-io" % Fs2Version % Test),
 
     Test / scalacOptions += "-Yrangepos",
     Test / testOptions := Seq(Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")),
+    Test / parallelExecution := false,
 
     performMavenCentralSync := true,
     publishAsOSSProject := true,

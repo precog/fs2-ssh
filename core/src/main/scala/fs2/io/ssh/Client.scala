@@ -17,8 +17,7 @@
 package fs2
 package io.ssh
 
-import cats.effect.kernel.Async
-import cats.effect.Resource
+import cats.effect.{Resource, Async}
 import cats.implicits._
 import cats.mtl.Raise
 import org.apache.sshd.client.SshClient
@@ -64,10 +63,12 @@ final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
     } yield new Process[F](channel, chunkSize)
   }
 
-  def portForward(cc: ConnectionConfig,
-                  local: InetSocketAddress,
-                  remote: InetSocketAddress)(
-                   implicit FR: Raise[F, Error]): Resource[F, Unit] = {
+  def portForward(
+     cc: ConnectionConfig,
+     local: InetSocketAddress,
+     remote: InetSocketAddress)(
+     implicit FR: Raise[F, Error])
+     : Resource[F, Unit] = {
     this.session(cc).flatMap { clientSession =>
       val l = SshdSocketAddress.toSshdSocketAddress(local)
       val r = SshdSocketAddress.toSshdSocketAddress(remote)

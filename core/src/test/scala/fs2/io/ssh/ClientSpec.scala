@@ -25,6 +25,8 @@ import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
 import cats.implicits._
 import cats.mtl.Raise
+import fs2.io.file.{Files, Flags}
+import org.http4s.okhttp.client.OkHttpBuilder
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
@@ -94,9 +96,11 @@ class ClientSpec extends Specification with SshDockerService {
     "authenticate with an unprotected key in memory" in setup { (client, isa) =>
       for {
         keyChunks <-
-          file.readAll[IO](
-            Paths.get("core", "src", "test", "resources", "nopassword"),
-            4096)
+          Files[IO].readAll(
+            fs2.io.file.Path.fromNioPath(Paths.get("core", "src", "test", "resources", "nopassword")),
+            4096,
+            Flags.Read
+          )
           .chunks
           .compile
           .resource
@@ -127,9 +131,11 @@ class ClientSpec extends Specification with SshDockerService {
     "authenticate with a protected key in memory" in setup { (client, isa) =>
       for {
         keyChunks <-
-          file.readAll[IO](
-            Paths.get("core", "src", "test", "resources", "password"),
-            4096)
+          Files[IO].readAll(
+            fs2.io.file.Path.fromNioPath(Paths.get("core", "src", "test", "resources", "password")),
+            4096,
+            Flags.Read
+          )
           .chunks
           .compile
           .resource
@@ -267,6 +273,21 @@ class ClientSpec extends Specification with SshDockerService {
         status <- Resource.eval(p.join)
         _ <- Resource.eval(IO(status mustEqual 1))
       } yield ()
+    }
+
+    "forward the port" in setup { (client, isa) =>
+      client.portForward(
+        ConnectionConfig(
+          isa,
+          testUser,
+          Auth.Password(testPassword)),
+        InetSocketAddress.createUnresolved("127.0.0.1", 3000),
+        InetSocketAddress.createUnresolved(isa.getHostString, 3000)
+      ) >> OkHttpBuilder.withDefaultClient[IO].flatMap(_.resource).evalMap { client =>
+        client.get("http://127.0.0.1:3000")(r => IO.pure(r.status.isSuccess)).flatMap { result =>
+          IO.delay(result mustEqual true)
+        }.void
+      }
     }
   }
 

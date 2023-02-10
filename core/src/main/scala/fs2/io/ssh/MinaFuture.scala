@@ -114,7 +114,10 @@ private[ssh] object MinaFuture {
     def exception(s: IoReadFuture) = s.getException()
 
     def result(s: IoReadFuture) = {
-      Chunk.array(s.getBuffer().array())
+      val buffer = s.getBuffer()
+      // IoReadFuture#getRead tells us how many bytes were actually read, so we know how much of the array it is safe to consume
+      val length = s.getRead()
+      Chunk.array(buffer.array(), 0, length)
     }
   }
 
