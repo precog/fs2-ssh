@@ -17,20 +17,17 @@
 package fs2
 package io.ssh
 
-import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.effect.syntax.bracket._
+import cats.effect.kernel.Async
+import cats.effect.Sync
 import cats.implicits._
-
 import org.apache.sshd.client.future.OpenFuture
 import org.apache.sshd.common.Closeable
 import org.apache.sshd.common.future.{CloseFuture, SshFuture, SshFutureListener}
 import org.apache.sshd.common.io.{IoReadFuture, IoWriteFuture}
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.client.future.{AuthFuture, ConnectFuture}
-
 import scala.{Array, Boolean, Byte, Unit}
 import scala.util.{Left, Right}
-
 import java.lang.{SuppressWarnings, Throwable}
 
 // this is an unsafe abstraction which exists solely because it should already exist
@@ -45,13 +42,13 @@ private[ssh] object MinaFuture {
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
   def fromFuture[
-      F[_]: Concurrent: ContextShift,
+      F[_]: Async,
       S <: SshFuture[S]](
       fcf: F[S])(
       implicit S: MinaFuture[S])
       : F[S.A] = {
 
-    val fa = Concurrent cancelableF[F, S.A] { cb =>
+    Async[F].async[S.A] { cb =>
       fcf flatMap { fut =>
         Sync[F] delay {
           val _ = fut addListener { fut =>
@@ -62,26 +59,22 @@ private[ssh] object MinaFuture {
               cb(Right(S.result(fut)))
           }
 
-          Sync[F].delay(S.cancel(fut))
+          Async[F].delay(S.cancel(fut)).some
         }
       }
     }
-
-    fa.guarantee(ContextShift[F].shift)
   }
 
-  def awaitClose[F[_]: Concurrent: ContextShift](c: Closeable): F[Unit] = {
-    val fa = Concurrent cancelableF[F, Unit] { cb =>
-      Sync[F] delay {
+  def awaitClose[F[_]: Async](c: Closeable): F[Unit] = {
+    Async[F].async[Unit] { cb =>
+      Async[F] delay {
         val listener: SshFutureListener[CloseFuture] =
           _ => cb(Right(()))
 
         c.addCloseFutureListener(listener)
-        Sync[F].delay(c.removeCloseFutureListener(listener))
-      }
+        Async[F].delay(c.removeCloseFutureListener(listener))
+      }.some
     }
-
-    fa.guarantee(ContextShift[F].shift)
   }
 
   implicit object SaneConnectFuture extends MinaFuture[ConnectFuture] {
@@ -122,8 +115,9 @@ private[ssh] object MinaFuture {
 
     def result(s: IoReadFuture) = {
       val buffer = s.getBuffer()
+      // IoReadFuture#getRead tells us how many bytes were actually read, so we know how much of the array it is safe to consume
       val length = s.getRead()
-      Chunk.bytes(buffer.array(), 0, length)
+      Chunk.array(buffer.array(), 0, length)
     }
   }
 

@@ -18,22 +18,21 @@ package fs2
 package io
 package ssh
 
-import cats.Applicative
+import cats.{Applicative, Functor}
 import cats.data.EitherT
-import cats.effect.{Blocker, Concurrent, ContextShift, IO, Resource}
+import cats.effect.kernel.Async
+import cats.effect.unsafe.IORuntime
+import cats.effect.{IO, Resource}
 import cats.implicits._
-import cats.mtl.FunctorRaise
-import cats.mtl.instances.all._
-
+import cats.mtl.Raise
+import fs2.io.file.{Files, Flags}
+import org.http4s.okhttp.client.OkHttpBuilder
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-
-import scala.{math, Byte, None, Some, StringContext, Unit}
+import scala.{Byte, None, Some, StringContext, Unit, math}
 import scala.collection.immutable.Seq
-
 import java.lang.{RuntimeException, String, System}
 import java.net.InetSocketAddress
 import java.nio.file.Paths
@@ -43,9 +42,9 @@ import java.nio.file.Paths
 // the "fs2-ssh test server" entry in 1Password
 // they will only run on Travis if you push your branch to upstream
 class ClientSpec extends Specification with SshDockerService {
-  implicit val cs = IO.contextShift(ExecutionContext.global)
 
   val Timeout = 30.seconds
+  implicit val ioRuntime: IORuntime = IORuntime.global
 
   val testHost = "localhost"
   val testPort = 2222
@@ -57,52 +56,51 @@ class ClientSpec extends Specification with SshDockerService {
     final case class WrappedError(e: Client.Error) extends RuntimeException(e.toString)
 
     // useful for tests where we're implicitly asserting no errors
-    implicit val throwingFR: FunctorRaise[IO, Client.Error] =
-      new FunctorRaise[IO, Client.Error] {
-        val functor = IO.ioEffect
-        def raise[A](e: Client.Error) =
-          IO.raiseError(WrappedError(e))
+    implicit val throwingFR: Raise[IO, Client.Error] =
+      new Raise[IO, Client.Error] {
+        val functor = Functor[IO]
+
+        override def raise[E2 <: Client.Error, A](e: E2): IO[A] =
+          IO.raiseError[A](WrappedError(e))
       }
 
-    "authenticate with a password" in setup { (blocker, client, isa) =>
+    "authenticate with a password" in setup { (client, isa) =>
       client.exec(
         ConnectionConfig(
           isa,
           testUser,
           Auth.Password(testPassword)),
-        "whoami",
-        blocker).void
+        "whoami").void
     }
 
-    "report authentication failure" in setupF[EitherT[IO, Client.Error, ?]](
-      { (blocker, client, isa) =>
+    "report authentication failure" in setupF[EitherT[IO, Client.Error, *]](
+      { (client, isa) =>
         client.exec(
           ConnectionConfig(
             isa,
             testUser,
             Auth.Password("bippy")),
-          "whoami",
-          blocker).void
+          "whoami").void
       },
       _.value.unsafeRunTimed(Timeout) must beSome(beLeft(Client.Error.Authentication: Client.Error)))
 
-    "authenticate with an unprotected key" in setup { (blocker, client, isa) =>
+    "authenticate with an unprotected key" in setup { (client, isa) =>
       client.exec(
         ConnectionConfig(
           isa,
           testUser,
           Auth.KeyFile(Paths.get("core", "src", "test", "resources", "nopassword"), None)),
-        "whoami",
-        blocker).void
+        "whoami").void
     }
 
-    "authenticate with an unprotected key in memory" in setup { (blocker, client, isa) =>
+    "authenticate with an unprotected key in memory" in setup { (client, isa) =>
       for {
         keyChunks <-
-          file.readAll[IO](
-            Paths.get("core", "src", "test", "resources", "nopassword"),
-            blocker,
-            4096)
+          Files[IO].readAll(
+            fs2.io.file.Path.fromNioPath(Paths.get("core", "src", "test", "resources", "nopassword")),
+            4096,
+            Flags.Read
+          )
           .chunks
           .compile
           .resource
@@ -115,12 +113,11 @@ class ClientSpec extends Specification with SshDockerService {
             isa,
             testUser,
             Auth.KeyBytes(key, None)),
-          "whoami",
-          blocker)
+          "whoami")
       } yield ()
     }
 
-    "authenticate with a protected key" in setup { (blocker, client, isa) =>
+    "authenticate with a protected key" in setup { (client, isa) =>
       client.exec(
         ConnectionConfig(
           isa,
@@ -128,17 +125,17 @@ class ClientSpec extends Specification with SshDockerService {
           Auth.KeyFile(
             Paths.get("core", "src", "test", "resources", "password"),
             Some(keyPassword))),
-        "whoami",
-        blocker).void
+        "whoami").void
     }
 
-    "authenticate with a protected key in memory" in setup { (blocker, client, isa) =>
+    "authenticate with a protected key in memory" in setup { (client, isa) =>
       for {
         keyChunks <-
-          file.readAll[IO](
-            Paths.get("core", "src", "test", "resources", "password"),
-            blocker,
-            4096)
+          Files[IO].readAll(
+            fs2.io.file.Path.fromNioPath(Paths.get("core", "src", "test", "resources", "password")),
+            4096,
+            Flags.Read
+          )
           .chunks
           .compile
           .resource
@@ -151,20 +148,18 @@ class ClientSpec extends Specification with SshDockerService {
             isa,
             testUser,
             Auth.KeyBytes(key, Some(keyPassword))),
-          "whoami",
-          blocker)
+          "whoami")
       } yield ()
     }
 
-    "read from stdout" in setup { (blocker, client, isa) =>
+    "read from stdout" in setup { (client, isa) =>
       for {
         p <- client.exec(
           ConnectionConfig(
             isa,
             testUser,
             Auth.Password(testPassword)),
-          "whoami",
-          blocker)
+          "whoami")
 
         results <- p.stdout
           .chunks
@@ -174,19 +169,18 @@ class ClientSpec extends Specification with SshDockerService {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual testUser))
+        _ <- Resource.eval(IO(results.trim mustEqual testUser))
       } yield ()
     }
 
-    "read from stderr" in setup { (blocker, client, isa) =>
+    "read from stderr" in setup { (client, isa) =>
       for {
         p <- client.exec(
           ConnectionConfig(
             isa,
             testUser,
             Auth.Password(testPassword)),
-          "whoami >&2",
-          blocker)
+          "whoami >&2")
 
         results <- p.stderr
           .chunks
@@ -196,15 +190,15 @@ class ClientSpec extends Specification with SshDockerService {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual testUser))
+        _ <- Resource.eval(IO(results.trim mustEqual testUser))
       } yield ()
     }
 
-    "write to stdin" in setup { (blocker, client, isa) =>
+    "write to stdin" in setup { (client, isa) =>
       val data = "Hello, It's me, I've been wondering if after all these years you'd like to meet"
 
       for {
-        num <- Resource.liftF(IO(math.abs(math.random() * 100000)))
+        num <- Resource.eval(IO(math.abs(math.random() * 100000)))
 
         // we need to nest the resource here because we want to explicitly close the connection
         r = for {
@@ -213,10 +207,9 @@ class ClientSpec extends Specification with SshDockerService {
               isa,
               testUser,
               Auth.Password(testPassword)),
-            s"cat > /tmp/testing-${num}",
-            blocker)
+            s"cat > /tmp/testing-${num}")
 
-          _ <- Stream.chunk(Chunk.bytes(data.getBytes))
+          _ <- Stream.chunk(Chunk.array(data.getBytes))
               .through(p1.stdin)
               .compile
               .resource
@@ -224,15 +217,14 @@ class ClientSpec extends Specification with SshDockerService {
         } yield ()
 
         // you know, a close function on Resource would be really great right about now...
-        _ <- Resource.liftF(r.use(_ => IO.unit))
+        _ <- Resource.eval(r.use(_ => IO.unit))
 
         p2 <- client.exec(
           ConnectionConfig(
             isa,
             testUser,
             Auth.Password(testPassword)),
-          s"cat /tmp/testing-${num}",
-          blocker)
+          s"cat /tmp/testing-${num}")
 
         results <- p2.stdout
           .chunks
@@ -242,26 +234,25 @@ class ClientSpec extends Specification with SshDockerService {
           .resource
           .lastOrError
 
-        _ <- Resource.liftF(IO(results.trim mustEqual data))
+        _ <- Resource.eval(IO(results.trim mustEqual data))
       } yield ()
     }
 
-    "join on remote command, awaiting result" in setup { (blocker, client, isa) =>
+    "join on remote command, awaiting result" in setup { (client, isa) =>
       for {
-        now <- Resource.liftF(IO(System.currentTimeMillis))
+        now <- Resource.eval(IO(System.currentTimeMillis))
 
         p <- client.exec(
           ConnectionConfig(
             isa,
             testUser,
             Auth.Password(testPassword)),
-          "sleep 5",
-          blocker)
+          "sleep 5")
 
-        status <- Resource.liftF(p.join)
-        now2 <- Resource.liftF(IO(System.currentTimeMillis))
+        status <- Resource.eval(p.join)
+        now2 <- Resource.eval(IO(System.currentTimeMillis))
 
-        _ <- Resource liftF {
+        _ <- Resource eval {
           IO {
             status mustEqual 0
             (now2 - now) must beGreaterThan(5000L)
@@ -270,35 +261,48 @@ class ClientSpec extends Specification with SshDockerService {
       } yield ()
     }
 
-    "join on remote command, reporting non-zero status" in setup { (blocker, client, isa) =>
+    "join on remote command, reporting non-zero status" in setup { (client, isa) =>
       for {
         p <- client.exec(
           ConnectionConfig(
             isa,
             testUser,
             Auth.Password(testPassword)),
-          "exit 1",
-          blocker)
+          "exit 1")
 
-        status <- Resource.liftF(p.join)
-        _ <- Resource.liftF(IO(status mustEqual 1))
+        status <- Resource.eval(p.join)
+        _ <- Resource.eval(IO(status mustEqual 1))
       } yield ()
+    }
+
+    "forward the port" in setup { (client, isa) =>
+      client.portForward(
+        ConnectionConfig(
+          isa,
+          testUser,
+          Auth.Password(testPassword)),
+        InetSocketAddress.createUnresolved("127.0.0.1", 3000),
+        InetSocketAddress.createUnresolved(isa.getHostString, 3000)
+      ) >> OkHttpBuilder.withDefaultClient[IO].flatMap(_.resource).evalMap { client =>
+        client.get("http://127.0.0.1:3000")(r => IO.pure(r.status.isSuccess)).flatMap { result =>
+          IO.delay(result mustEqual true)
+        }.void
+      }
     }
   }
 
-  def setup(f: (Blocker, Client[IO], InetSocketAddress) => Resource[IO, Unit]): Result =
+  def setup(f: (Client[IO], InetSocketAddress) => Resource[IO, Unit]): Result =
     setupF[IO](f, _.unsafeRunTimed(Timeout) must beSome)
 
-  def setupF[F[_]: Concurrent: ContextShift](
-      f: (Blocker, Client[F], InetSocketAddress) => Resource[F, Unit],
+  def setupF[F[_]: Async](
+      f: (Client[F], InetSocketAddress) => Resource[F, Unit],
       finish: F[Unit] => Result)
       : Result = {
 
     val r = for {
-      blocker <- Blocker[F]
       client <- Client[F]
-      isa <- Resource.liftF(Client.resolve[F](testHost, testPort, blocker))
-      _ <- f(blocker, client, isa)
+      isa <- Resource.eval(Client.resolve[F](testHost, testPort))
+      _ <- f(client, isa)
     } yield ()
 
     finish(r.use(_ => Applicative[F].unit))
