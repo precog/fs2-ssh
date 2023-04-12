@@ -14,7 +14,7 @@ scmInfo in ThisBuild := Some(ScmInfo(
 
 logBuffered in ThisBuild := false
 
-val SshdVersion = "2.9.0"
+val SshdVersion = "2.9.2"
 val Fs2Version = "3.6.1"
 
 // Include to also publish a project's tests
