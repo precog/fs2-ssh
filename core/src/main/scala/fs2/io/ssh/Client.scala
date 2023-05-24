@@ -27,13 +27,13 @@ import org.apache.sshd.common.SshException
 import org.apache.sshd.common.channel.StreamingChannel
 import org.apache.sshd.common.config.keys.FilePasswordProvider
 import org.apache.sshd.common.keyprovider.FileKeyPairProvider
+import org.apache.sshd.common.session.SessionHeartbeatController.HeartbeatType
 import org.apache.sshd.common.util.net.SshdSocketAddress
 import scala.{Array, Int, None, Product, Serializable, Some, Unit}
 import scala.util.{Left, Right}
 import java.lang.{String, SuppressWarnings}
 import java.net.{InetAddress, InetSocketAddress}
 import java.util.concurrent.TimeUnit
-import org.apache.sshd.common.session.SessionHeartbeatController.HeartbeatType
 
 final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
   import CompatConverters.All._
