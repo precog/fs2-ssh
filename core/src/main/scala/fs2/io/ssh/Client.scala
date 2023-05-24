@@ -32,6 +32,8 @@ import scala.{Array, Int, None, Product, Serializable, Some, Unit}
 import scala.util.{Left, Right}
 import java.lang.{String, SuppressWarnings}
 import java.net.{InetAddress, InetSocketAddress}
+import java.util.concurrent.TimeUnit
+import org.apache.sshd.common.session.SessionHeartbeatController.HeartbeatType
 
 final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
   import CompatConverters.All._
@@ -157,11 +159,16 @@ final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
 }
 
 object Client {
+  val HeartbeatInterval = 20L
 
   def apply[F[_]: Async]: Resource[F, Client[F]] = {
     val makeF = Async[F] delay {
       val client = SshClient.setUpDefaultClient()
       client.setHostConfigEntryResolver(HostConfigEntryResolver.EMPTY)
+
+      // send periodic SSH_MSG_IGNOREs to prevent the connection from dying
+      // without activity
+      client.setSessionHeartbeat(HeartbeatType.IGNORE, TimeUnit.SECONDS, HeartbeatInterval)
 
       client.start()
       client
