@@ -6,9 +6,9 @@ ThisBuild / scalaVersion := (ThisBuild / crossScalaVersions).value.head
 
 ThisBuild / githubRepository := "fs2-ssh"
 
-homepage in ThisBuild := Some(url("https://github.com/precog/fs2-ssh"))
+ThisBuild / homepage := Some(url("https://github.com/precog/fs2-ssh"))
 
-scmInfo in ThisBuild := Some(ScmInfo(
+ThisBuild / scmInfo := Some(ScmInfo(
   url("https://github.com/precog/fs2-ssh"),
   "scm:git@github.com:precog/fs2-ssh.git"))
 
