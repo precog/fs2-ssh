@@ -79,14 +79,20 @@ private[ssh] object MinaFuture {
 
   implicit object SaneConnectFuture extends MinaFuture[ConnectFuture] {
     type A = ClientSession
-    def cancel(s: ConnectFuture) = s.cancel()
+    def cancel(s: ConnectFuture) = {
+      s.cancel()
+      ()
+    }
     def exception(s: ConnectFuture) = s.getException()
     def result(s: ConnectFuture) = s.getSession()
   }
 
   implicit object SaneAuthFuture extends MinaFuture[AuthFuture] {
     type A = Boolean
-    def cancel(s: AuthFuture) = s.cancel()
+    def cancel(s: AuthFuture) = {
+      s.cancel()
+      ()
+    }
     def exception(s: AuthFuture) = s.getException()
     def result(s: AuthFuture) = s.isSuccess()
   }
@@ -94,7 +100,10 @@ private[ssh] object MinaFuture {
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
   implicit object SaneOpenFuture extends MinaFuture[OpenFuture] {
     type A = Boolean
-    def cancel(s: OpenFuture) = s.cancel()
+    def cancel(s: OpenFuture) = {
+      s.cancel()
+      ()
+    }
     def exception(s: OpenFuture) = s.getException()
     def result(s: OpenFuture) = s.isOpened()
   }

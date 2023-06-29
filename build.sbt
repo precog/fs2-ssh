@@ -12,14 +12,15 @@ ThisBuild / scmInfo := Some(ScmInfo(
   url("https://github.com/precog/fs2-ssh"),
   "scm:git@github.com:precog/fs2-ssh.git"))
 
-logBuffered in ThisBuild := false
+ThisBuild / logBuffered := false
 
-val SshdVersion = "2.9.2"
+val NettyVersion = "4.1.94.Final"
+val SshdVersion = "2.10.0"
 val Fs2Version = "3.6.1"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
-  publishArtifact in (Test, packageBin) := true)
+  Test / packageBin / publishArtifact := true)
 
 lazy val root = project
   .in(file("."))
@@ -45,12 +46,22 @@ lazy val core = project
       "com.whisk" %% "docker-testkit-impl-spotify" % "0.9.9" % Test,
       "org.http4s" %% "http4s-okhttp-client" % "0.23.11" % Test,
       "co.fs2" %% "fs2-io" % Fs2Version % Test),
+    dependencyOverrides ++= Seq(
+      "io.netty" % "netty-buffer" % NettyVersion,
+      "io.netty" % "netty-codec" % NettyVersion,
+      "io.netty" % "netty-common" % NettyVersion,
+      "io.netty" % "netty-handler" % NettyVersion,
+      "io.netty" % "netty-resolver" % NettyVersion,
+      "io.netty" % "netty-transport" % NettyVersion,
+      "io.netty" % "netty-codec-http" % NettyVersion,
+      "io.netty" % "netty-codec-socks" % NettyVersion,
+      "io.netty" % "netty-handler-proxy" % NettyVersion
+    ),
 
     Test / scalacOptions += "-Yrangepos",
     Test / testOptions := Seq(Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")),
     Test / parallelExecution := false,
 
-    performMavenCentralSync := true,
     publishAsOSSProject := true,
 
     initialCommands := """
