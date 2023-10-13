@@ -14,9 +14,11 @@ ThisBuild / scmInfo := Some(ScmInfo(
 
 ThisBuild / logBuffered := false
 
-val NettyVersion = "4.1.94.Final"
-val SshdVersion = "2.10.0"
+val CatsEffectVersion = "3.4.11"
+val CatsMtlVersion = "1.3.0"
 val Fs2Version = "3.6.1"
+val NettyVersion = "4.1.100.Final"
+val SshdVersion = "2.10.0"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
@@ -35,9 +37,9 @@ lazy val core = project
       "org.apache.sshd" % "sshd-core"  % SshdVersion,
       "org.apache.sshd" % "sshd-netty" % SshdVersion,
 
-      "org.typelevel" %% "cats-effect"   % "3.4.6",
+      "org.typelevel" %% "cats-effect"   % CatsEffectVersion,
       "co.fs2"        %% "fs2-core"      % Fs2Version,
-      "org.typelevel" %% "cats-mtl" % "1.3.0",
+      "org.typelevel" %% "cats-mtl" % CatsMtlVersion,
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
       "org.specs2" %% "specs2-core" % "4.19.2"  % Test,
