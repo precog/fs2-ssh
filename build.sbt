@@ -18,7 +18,7 @@ val CatsEffectVersion = "3.4.11"
 val CatsMtlVersion = "1.3.0"
 val Fs2Version = "3.6.1"
 val NettyVersion = "4.1.100.Final"
-val SshdVersion = "2.10.0"
+val SshdVersion = "2.13.2"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(
