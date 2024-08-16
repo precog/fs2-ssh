@@ -47,7 +47,7 @@ private[ssh] final class ByteArrayKeyPairProvider private (
       NamedResource.ofName(BytesMagicKey),
       bis,
       maybePass match {
-        case Some(password) => { (session, key, _) =>
+        case Some(password) => { (_, key, _) =>
           if (key.getName() === BytesMagicKey)
             password
           else

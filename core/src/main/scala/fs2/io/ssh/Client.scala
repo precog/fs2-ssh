@@ -52,7 +52,7 @@ final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
       channel <- Resource.make(for {
         channel <- F.delay(session.createExecChannel(command))
         _ <- F.delay(channel.setStreaming(StreamingChannel.Streaming.Async))
-        opened <- fromFuture(F.delay(channel.open()))
+        _ <- fromFuture(F.delay(channel.open()))
         // TODO handle failure opening
       } yield channel)(channel =>
         fromFuture(F.delay(channel.close(false))).void
