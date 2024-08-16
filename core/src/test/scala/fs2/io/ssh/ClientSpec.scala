@@ -34,6 +34,7 @@ import java.lang.{RuntimeException, String, System}
 import java.net.InetSocketAddress
 import java.nio.file.Paths
 import munit.CatsEffectSuite
+import scala.annotation.nowarn
 
 // these are really more like integration tests
 // to run them locally, make sure you have things from
@@ -69,6 +70,7 @@ class ClientSpec extends CatsEffectSuite with SshDockerService {
     finish(r.use(_ => Applicative[F].unit))
   }
 
+  @nowarn
   final case class WrappedError(e: Client.Error)
       extends RuntimeException(e.toString)
 
@@ -106,7 +108,6 @@ class ClientSpec extends CatsEffectSuite with SshDockerService {
         eit.value.map(a => assertEquals(a, Left(Client.Error.Authentication)))
       )
     }
-    //     beLeft(Client.Error.Authentication: Client.Error)
 
   }
 
