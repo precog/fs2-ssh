@@ -42,7 +42,7 @@ import scala.annotation.nowarn
 // they will only run on Travis if you push your branch to upstream
 class ClientSpec extends CatsEffectSuite with SshDockerService {
 
-  override val munitTimeout = Duration(60, "s")
+  override val munitTimeout = Duration(90, "s")
 
   val testHost = "localhost"
   val testUser = "fs2-ssh"
