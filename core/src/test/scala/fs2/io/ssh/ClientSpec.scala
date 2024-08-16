@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Precog Data
+ * Copyright 2022 Precog Data Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,11 @@ package ssh
 import cats.{Applicative, Functor}
 import cats.data.EitherT
 import cats.effect.kernel.Async
-import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
 import cats.implicits._
 import cats.mtl.Raise
 import fs2.io.file.{Files, Flags}
 import org.http4s.okhttp.client.OkHttpBuilder
-import org.specs2.execute.Result
-import org.specs2.mutable.Specification
 
 import scala.concurrent.duration._
 import scala.{Byte, None, Some, StringContext, Unit, math}
@@ -36,268 +33,32 @@ import scala.collection.immutable.Seq
 import java.lang.{RuntimeException, String, System}
 import java.net.InetSocketAddress
 import java.nio.file.Paths
+import munit.CatsEffectSuite
 
 // these are really more like integration tests
 // to run them locally, make sure you have things from
 // the "fs2-ssh test server" entry in 1Password
 // they will only run on Travis if you push your branch to upstream
-class ClientSpec extends Specification with SshDockerService {
+class ClientSpec extends CatsEffectSuite with SshDockerService {
 
   val Timeout = 30.seconds
-  implicit val ioRuntime: IORuntime = IORuntime.global
 
   val testHost = "localhost"
-  val testPort = 2222
   val testUser = "fs2-ssh"
   val testPassword = "password"
   val keyPassword = "password"
 
-  "ssh client" should {
-    final case class WrappedError(e: Client.Error) extends RuntimeException(e.toString)
+  val fixture = ResourceFixture(containerResource)
 
-    // useful for tests where we're implicitly asserting no errors
-    implicit val throwingFR: Raise[IO, Client.Error] =
-      new Raise[IO, Client.Error] {
-        val functor = Functor[IO]
+  def setup[F[_]: Async](testPort: Int)(
+      f: (Client[F], InetSocketAddress) => Resource[F, Unit]
+  ) = setupF[F](testPort)(f)(identity)
 
-        override def raise[E2 <: Client.Error, A](e: E2): IO[A] =
-          IO.raiseError[A](WrappedError(e))
-      }
-
-    "authenticate with a password" in setup { (client, isa) =>
-      client.exec(
-        ConnectionConfig(
-          isa,
-          testUser,
-          Auth.Password(testPassword)),
-        "whoami").void
-    }
-
-    "report authentication failure" in setupF[EitherT[IO, Client.Error, *]](
-      { (client, isa) =>
-        client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.Password("bippy")),
-          "whoami").void
-      },
-      _.value.unsafeRunTimed(Timeout) must beSome(beLeft(Client.Error.Authentication: Client.Error)))
-
-    "authenticate with an unprotected key" in setup { (client, isa) =>
-      client.exec(
-        ConnectionConfig(
-          isa,
-          testUser,
-          Auth.KeyFile(Paths.get("core", "src", "test", "resources", "nopassword"), None)),
-        "whoami").void
-    }
-
-    "authenticate with an unprotected key in memory" in setup { (client, isa) =>
-      for {
-        keyChunks <-
-          Files[IO].readAll(
-            fs2.io.file.Path.fromNioPath(Paths.get("core", "src", "test", "resources", "nopassword")),
-            4096,
-            Flags.Read
-          )
-          .chunks
-          .compile
-          .resource
-          .to(Seq)
-
-        key = Chunk.concat(keyChunks).toArray[Byte]
-
-        _ <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.KeyBytes(key, None)),
-          "whoami")
-      } yield ()
-    }
-
-    "authenticate with a protected key" in setup { (client, isa) =>
-      client.exec(
-        ConnectionConfig(
-          isa,
-          testUser,
-          Auth.KeyFile(
-            Paths.get("core", "src", "test", "resources", "password"),
-            Some(keyPassword))),
-        "whoami").void
-    }
-
-    "authenticate with a protected key in memory" in setup { (client, isa) =>
-      for {
-        keyChunks <-
-          Files[IO].readAll(
-            fs2.io.file.Path.fromNioPath(Paths.get("core", "src", "test", "resources", "password")),
-            4096,
-            Flags.Read
-          )
-          .chunks
-          .compile
-          .resource
-          .to(Seq)
-
-        key = Chunk.concat(keyChunks).toArray[Byte]
-
-        _ <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.KeyBytes(key, Some(keyPassword))),
-          "whoami")
-      } yield ()
-    }
-
-    "read from stdout" in setup { (client, isa) =>
-      for {
-        p <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.Password(testPassword)),
-          "whoami")
-
-        results <- p.stdout
-          .chunks
-          .map(bytes => new String(bytes.toArray[Byte]))
-          .foldMonoid
-          .compile
-          .resource
-          .lastOrError
-
-        _ <- Resource.eval(IO(results.trim mustEqual testUser))
-      } yield ()
-    }
-
-    "read from stderr" in setup { (client, isa) =>
-      for {
-        p <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.Password(testPassword)),
-          "whoami >&2")
-
-        results <- p.stderr
-          .chunks
-          .map(bytes => new String(bytes.toArray[Byte]))
-          .foldMonoid
-          .compile
-          .resource
-          .lastOrError
-
-        _ <- Resource.eval(IO(results.trim mustEqual testUser))
-      } yield ()
-    }
-
-    "write to stdin" in setup { (client, isa) =>
-      val data = "Hello, It's me, I've been wondering if after all these years you'd like to meet"
-
-      for {
-        num <- Resource.eval(IO(math.abs(math.random() * 100000)))
-
-        // we need to nest the resource here because we want to explicitly close the connection
-        r = for {
-          p1 <- client.exec(
-            ConnectionConfig(
-              isa,
-              testUser,
-              Auth.Password(testPassword)),
-            s"cat > /tmp/testing-${num}")
-
-          _ <- Stream.chunk(Chunk.array(data.getBytes))
-              .through(p1.stdin)
-              .compile
-              .resource
-              .drain
-        } yield ()
-
-        // you know, a close function on Resource would be really great right about now...
-        _ <- Resource.eval(r.use(_ => IO.unit))
-
-        p2 <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.Password(testPassword)),
-          s"cat /tmp/testing-${num}")
-
-        results <- p2.stdout
-          .chunks
-          .map(bytes => new String(bytes.toArray[Byte]))
-          .foldMonoid
-          .compile
-          .resource
-          .lastOrError
-
-        _ <- Resource.eval(IO(results.trim mustEqual data))
-      } yield ()
-    }
-
-    "join on remote command, awaiting result" in setup { (client, isa) =>
-      for {
-        now <- Resource.eval(IO(System.currentTimeMillis))
-
-        p <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.Password(testPassword)),
-          "sleep 5")
-
-        status <- Resource.eval(p.join)
-        now2 <- Resource.eval(IO(System.currentTimeMillis))
-
-        _ <- Resource eval {
-          IO {
-            status mustEqual 0
-            (now2 - now) must beGreaterThan(5000L)
-          }
-        }
-      } yield ()
-    }
-
-    "join on remote command, reporting non-zero status" in setup { (client, isa) =>
-      for {
-        p <- client.exec(
-          ConnectionConfig(
-            isa,
-            testUser,
-            Auth.Password(testPassword)),
-          "exit 1")
-
-        status <- Resource.eval(p.join)
-        _ <- Resource.eval(IO(status mustEqual 1))
-      } yield ()
-    }
-
-    "forward the port" in setup { (client, isa) =>
-      client.portForward(
-        ConnectionConfig(
-          isa,
-          testUser,
-          Auth.Password(testPassword)),
-        InetSocketAddress.createUnresolved("127.0.0.1", 3000),
-        InetSocketAddress.createUnresolved(isa.getHostString, 3000)
-      ) >> OkHttpBuilder.withDefaultClient[IO].flatMap(_.resource).evalMap { client =>
-        client.get("http://127.0.0.1:3000")(r => IO.pure(r.status.isSuccess)).flatMap { result =>
-          IO.delay(result mustEqual true)
-        }.void
-      }
-    }
-  }
-
-  def setup(f: (Client[IO], InetSocketAddress) => Resource[IO, Unit]): Result =
-    setupF[IO](f, _.unsafeRunTimed(Timeout) must beSome)
-
-  def setupF[F[_]: Async](
-      f: (Client[F], InetSocketAddress) => Resource[F, Unit],
-      finish: F[Unit] => Result)
-      : Result = {
+  def setupF[F[_]: Async](testPort: Int)(
+      f: (Client[F], InetSocketAddress) => Resource[F, Unit]
+  )(
+      finish: F[Unit] => F[Unit]
+  ): F[Unit] = {
 
     val r = for {
       client <- Client[F]
@@ -306,5 +67,278 @@ class ClientSpec extends Specification with SshDockerService {
     } yield ()
 
     finish(r.use(_ => Applicative[F].unit))
+  }
+
+  final case class WrappedError(e: Client.Error)
+      extends RuntimeException(e.toString)
+
+  // useful for tests where we're implicitly asserting no errors
+  implicit val throwingFR: Raise[IO, Client.Error] =
+    new Raise[IO, Client.Error] {
+      val functor = Functor[IO]
+
+      override def raise[E2 <: Client.Error, A](e: E2): IO[A] =
+        IO.raiseError[A](WrappedError(e))
+    }
+
+  fixture.test("authenticate with a password") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      client
+        .exec(
+          ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+          "whoami"
+        )
+        .void
+    }
+
+  }
+
+  fixture.test("report authentication failure") { c =>
+    setupF[EitherT[IO, Client.Error, *]](c.mappedPort(22)) { (client, isa) =>
+      client
+        .exec(
+          ConnectionConfig(isa, testUser, Auth.Password("bippy")),
+          "whoami"
+        )
+        .void
+    } { eit =>
+      EitherT.liftF(
+        eit.value.map(a => assertEquals(a, Left(Client.Error.Authentication)))
+      )
+    }
+    //     beLeft(Client.Error.Authentication: Client.Error)
+
+  }
+
+  fixture.test("authenticate with an unprotected key") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      client
+        .exec(
+          ConnectionConfig(
+            isa,
+            testUser,
+            Auth.KeyFile(
+              Paths.get("core", "src", "test", "resources", "nopassword"),
+              None
+            )
+          ),
+          "whoami"
+        )
+        .void
+    }
+  }
+
+  fixture.test("authenticate with an unprotected key in memory") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      for {
+        keyChunks <-
+          Files[IO]
+            .readAll(
+              fs2.io.file.Path.fromNioPath(
+                Paths.get("core", "src", "test", "resources", "nopassword")
+              ),
+              4096,
+              Flags.Read
+            )
+            .chunks
+            .compile
+            .resource
+            .to(Seq)
+
+        key = Chunk.concat(keyChunks).toArray[Byte]
+
+        _ <- client.exec(
+          ConnectionConfig(isa, testUser, Auth.KeyBytes(key, None)),
+          "whoami"
+        )
+      } yield ()
+    }
+  }
+
+  fixture.test("authenticate with a protected key") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      client
+        .exec(
+          ConnectionConfig(
+            isa,
+            testUser,
+            Auth.KeyFile(
+              Paths.get("core", "src", "test", "resources", "password"),
+              Some(keyPassword)
+            )
+          ),
+          "whoami"
+        )
+        .void
+    }
+  }
+
+  fixture.test("authenticate with a protected key in memory") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      for {
+        keyChunks <-
+          Files[IO]
+            .readAll(
+              fs2.io.file.Path.fromNioPath(
+                Paths.get("core", "src", "test", "resources", "password")
+              ),
+              4096,
+              Flags.Read
+            )
+            .chunks
+            .compile
+            .resource
+            .to(Seq)
+
+        key = Chunk.concat(keyChunks).toArray[Byte]
+
+        _ <- client.exec(
+          ConnectionConfig(
+            isa,
+            testUser,
+            Auth.KeyBytes(key, Some(keyPassword))
+          ),
+          "whoami"
+        )
+      } yield ()
+    }
+  }
+
+  fixture.test("read from stdout") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      for {
+        p <- client.exec(
+          ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+          "whoami"
+        )
+
+        results <- p.stdout.chunks
+          .map(bytes => new String(bytes.toArray[Byte]))
+          .foldMonoid
+          .compile
+          .resource
+          .lastOrError
+
+        _ <- Resource.eval(IO(assertEquals(results.trim, testUser)))
+      } yield ()
+    }
+  }
+
+  fixture.test("read from stderr") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      for {
+        p <- client.exec(
+          ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+          "whoami >&2"
+        )
+
+        results <- p.stderr.chunks
+          .map(bytes => new String(bytes.toArray[Byte]))
+          .foldMonoid
+          .compile
+          .resource
+          .lastOrError
+
+        _ <- Resource.pure(assertEquals(results.trim, testUser))
+      } yield ()
+    }
+  }
+
+  fixture.test("write to stdin") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      val data =
+        "Hello, It's me, I've been wondering if after all these years you'd like to meet"
+
+      for {
+        num <- Resource.eval(IO(math.abs(math.random() * 100000)))
+
+        // we need to nest the resource here because we want to explicitly close the connection
+        r = for {
+          p1 <- client.exec(
+            ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+            s"cat > /tmp/testing-${num}"
+          )
+
+          _ <- Stream
+            .chunk(Chunk.array(data.getBytes))
+            .through(p1.stdin)
+            .compile
+            .resource
+            .drain
+        } yield ()
+
+        // you know, a close function on Resource would be really great right about now...
+        _ <- Resource.eval(r.use(_ => IO.unit))
+
+        p2 <- client.exec(
+          ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+          s"cat /tmp/testing-${num}"
+        )
+
+        results <- p2.stdout.chunks
+          .map(bytes => new String(bytes.toArray[Byte]))
+          .foldMonoid
+          .compile
+          .resource
+          .lastOrError
+
+        _ <- Resource.pure(assertEquals(results.trim, data))
+      } yield ()
+    }
+  }
+
+  fixture.test("join on remote command, awaiting result") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      for {
+        now <- Resource.eval(IO(System.currentTimeMillis))
+
+        p <- client.exec(
+          ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+          "sleep 5"
+        )
+
+        status <- Resource.eval(p.join)
+        now2 <- Resource.eval(IO(System.currentTimeMillis))
+
+        _ <- Resource eval {
+          IO {
+            assertEquals(status, 0)
+            assert((now2 - now) > (5000L))
+          }
+        }
+      } yield ()
+    }
+  }
+
+  fixture.test("join on remote command, reporting non-zero status") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      for {
+        p <- client.exec(
+          ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+          "exit 1"
+        )
+
+        status <- Resource.eval(p.join)
+        _ <- Resource.pure(assertEquals(status, 1))
+      } yield ()
+    }
+  }
+
+  fixture.test("forward the port") { c =>
+    setup[IO](c.mappedPort(22)) { (client, isa) =>
+      client.portForward(
+        ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
+        InetSocketAddress.createUnresolved("127.0.0.1", 3000),
+        InetSocketAddress.createUnresolved(isa.getHostString, 3000)
+      ) >> OkHttpBuilder.withDefaultClient[IO].flatMap(_.resource).evalMap {
+        client =>
+          client
+            .get("http://127.0.0.1:3000")(r => IO.pure(r.status.isSuccess))
+            .map { result =>
+              assert(result)
+            }
+            .void
+      }
+    }
   }
 }
