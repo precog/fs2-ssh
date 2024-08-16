@@ -24,7 +24,7 @@ env:
 jobs:
   build:
     name: Build and Test
-    if: "!(github.event_name == 'pull_request' && github.event.pull_request.draft) && !(github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && !startsWith(github.event.head_commit.message, 'Version release'))"
+    if: '!(github.event_name == ''pull_request'' && github.event.pull_request.draft) && !(github.event_name == ''push'' && (github.ref == ''refs/heads/main'' || github.ref == ''refs/heads/master'') && !startsWith(github.event.head_commit.message, ''Version release''))'
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -55,7 +55,7 @@ jobs:
       - run: $SBT '++ ${{ matrix.scala }}' ci
 
       - name: Compress target directories
-        run: tar cf targets.tar target modules/jdbc/target modules/jdbc-testkit/target project/target
+        run: tar cf targets.tar target core/target project/target
 
       - name: Upload target directories
         uses: actions/upload-artifact@v3
@@ -110,7 +110,7 @@ jobs:
   auto-merge:
     name: Auto Merge
     needs: [build]
-    if: "github.event_name == 'pull_request' && contains(github.head_ref, 'version-bump') && contains(github.event.pull_request.labels.*.name, 'version: revision')"
+    if: 'github.event_name == ''pull_request'' && contains(github.head_ref, ''version-bump'') && contains(github.event.pull_request.labels.*.name, ''version: revision'')'
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -123,11 +123,11 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            github.rest.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: ${{ github.event.pull_request.number }},
-            });
+              github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{ github.event.pull_request.number }},
+              }); 
           github-token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
 
   check-labels:
@@ -143,8 +143,8 @@ jobs:
       - name: Check PR labels
         uses: docker://agilepathway/pull-request-label-checker:v1.4.30
         with:
-          one_of: "version: breaking,version: feature,version: revision,version: release"
-          none_of: ":stop_sign:"
+          one_of: 'version: breaking,version: feature,version: revision,version: release'
+          none_of: ':stop_sign:'
           repo_token: ${{ env.GITHUB_TOKEN }}
 
   next-version:
@@ -171,72 +171,72 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const currentVersion = '${{steps.current_version.outputs.CURRENT_VERSION}}'
-            const parsedVersion = currentVersion.split(".")
-            var major = Number(parsedVersion[0])
-            var minor = Number(parsedVersion[1])
-            var patch = Number(parsedVersion[2])
+              const currentVersion = '${{steps.current_version.outputs.CURRENT_VERSION}}'
+              const parsedVersion = currentVersion.split(".")
+              var major = Number(parsedVersion[0])
+              var minor = Number(parsedVersion[1])
+              var patch = Number(parsedVersion[2])
 
-            const prResponse = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: context.sha
-            })
+              const prResponse = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha
+              })
 
-            const prs = prResponse.data
+              const prs = prResponse.data
 
-            if (prs === undefined) {
-              throw new Error("Could not fetch PRs for commit: status " + prs.status)
-            } else if (prs.length > 1) {
-              throw new Error("Cannot determine version increment required as there is more than one PR associated with the commit: " + context.sha)
-            } else if (prs.length === 0) {
-              throw new Error("Cannot determine version increment required as there are no PRs associated with the commit: " + context.sha)
-            }
+              if (prs === undefined) {
+                throw new Error("Could not fetch PRs for commit: status " + prs.status)
+              } else if (prs.length > 1) {
+                throw new Error("Cannot determine version increment required as there is more than one PR associated with the commit: " + context.sha)
+              } else if (prs.length === 0) {
+                throw new Error("Cannot determine version increment required as there are no PRs associated with the commit: " + context.sha)
+              } 
 
-            const pr = prs[0]
+              const pr = prs[0]
 
-            for (const label of pr.labels) {
-               if (label.name === 'version: revision') {
-                  patch = patch + 1
-                  break
-               } else if (label.name === 'version: feature') {
-                  patch = 0
-                  minor = minor + 1
-                  break
-               } else if (label.name === 'version: breaking') {
-                  major = major + 1
-                  minor = 0
-                  patch = 0
-                  break
-               } else if (label.name === 'version: release') {
-                  major = major + 1
-                  minor = 0
-                  patch = 0
-                  break
-               }
-            }
+              for (const label of pr.labels) {
+                 if (label.name === 'version: revision') {
+                    patch = patch + 1
+                    break
+                 } else if (label.name === 'version: feature') {
+                    patch = 0
+                    minor = minor + 1
+                    break
+                 } else if (label.name === 'version: breaking') {
+                    major = major + 1
+                    minor = 0
+                    patch = 0
+                    break
+                 } else if (label.name === 'version: release') {
+                    major = major + 1
+                    minor = 0
+                    patch = 0
+                    break
+                 }
+              }
 
-            const nextVersion = major + '.' + minor + '.' + patch
+              const nextVersion = major + '.' + minor + '.' + patch
 
-            if (nextVersion === currentVersion) {
-              throw new Error("Could not detect the version label on PR " + pr.number + " (obtained via association to commit " + context.sha + ")")
-            }
+              if (nextVersion === currentVersion) {
+                throw new Error("Could not detect the version label on PR " + pr.number + " (obtained via association to commit " + context.sha + ")")
+              }
 
-            console.log("Setting the next version to " + nextVersion)
+              console.log("Setting the next version to " + nextVersion)
 
-            var body = ""
-            if (pr.body === undefined || pr.body === null || pr.body === "") {
-              body = ""
-            } else {
-              body = "\n" + pr.body.replaceAll("\r\n", "\n")
-            }
+              var body = ""
+              if (pr.body === undefined || pr.body === null || pr.body === "") {
+                body = ""
+              } else {
+                body = "\n" + pr.body.replaceAll("\r\n", "\n")
+              }
 
-            // set outputs for
-            const result = {
-              nextVersion: nextVersion,
-              commitMessage: "Version release: " + nextVersion + "\n\n" + pr.title + body
-            }
-            return result
+              // set outputs for 
+              const result = {
+                nextVersion: nextVersion,
+                commitMessage: "Version release: " + nextVersion + "\n\n" + pr.title + body
+              }
+              return result
 
       - name: Modify version
         id: modify_version
