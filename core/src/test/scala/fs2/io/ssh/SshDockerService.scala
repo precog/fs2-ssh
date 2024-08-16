@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Precog Data
+ * Copyright 2022 Precog Data Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,36 @@
 
 package fs2.io.ssh
 
-import java.io.File
+import cats.effect.Resource
+import cats.effect.IO
+import org.testcontainers.images.builder.ImageFromDockerfile
+import com.dimafeng.testcontainers.GenericContainer
+import java.nio.file.Path
 
-import com.spotify.docker.client.DefaultDockerClient
-import com.whisk.docker.DockerContainer
-import com.whisk.docker.impl.spotify.DockerKitSpotify
-import com.whisk.docker.specs2.DockerTestKit
+trait SshDockerService {
 
-import scala.{List, Some}
-import scala.Predef.ArrowAssoc
+  val containerResource = Resource
+    .make {
+      for {
 
-trait SshDockerService extends DockerTestKit with DockerKitSpotify {
-  private val dockerClient =  DefaultDockerClient.fromEnv().build()
+        c <- IO.delay {
 
-  def buildsshService(): DockerContainer ={
-    dockerClient.build(new File("core/src/test/resources/docker").toPath, "fs2-ssh")
-    DockerContainer("fs2-ssh")
-      .withPorts(22 -> Some(2222))
-  }
+          val img: ImageFromDockerfile =
+            new ImageFromDockerfile().withFileFromPath(
+              ".",
+              Path.of("core/src/test/resources/docker")
+            )
 
-  abstract override def dockerContainers: List[DockerContainer] =
-    buildsshService() :: super.dockerContainers
+          val cont =
+            GenericContainer.apply(img.getDockerImageName(), List(22, 3000))
+
+          img.get()
+
+          cont.start()
+
+          cont
+        }
+      } yield c
+    }(c => IO.delay(c.stop()))
+
 }

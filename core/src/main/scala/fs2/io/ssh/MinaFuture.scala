@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Precog Data
+ * Copyright 2022 Precog Data Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +41,9 @@ private[ssh] trait MinaFuture[S <: SshFuture[S]] {
 private[ssh] object MinaFuture {
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  def fromFuture[
-      F[_]: Async,
-      S <: SshFuture[S]](
-      fcf: F[S])(
-      implicit S: MinaFuture[S])
-      : F[S.A] = {
+  def fromFuture[F[_]: Async, S <: SshFuture[S]](
+      fcf: F[S]
+  )(implicit S: MinaFuture[S]): F[S.A] = {
 
     Async[F].async[S.A] { cb =>
       fcf flatMap { fut =>

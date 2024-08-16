@@ -9,14 +9,13 @@ name: Continuous Integration
 
 on:
   pull_request:
-    branches: [master, backport/v*]
+    branches: [master, main, backport/v*]
     types: [opened, reopened, synchronize, ready_for_review]
   push:
-    branches: [master, backport/v*]
+    branches: [master, main, backport/v*]
 
 env:
-  SBT: ./sbt
-  JABBA_INDEX: 'https://github.com/1Jo1/jabba/raw/support-graalvm-java-8-and-11/index.json'
+  SBT: sbt
   REPO_SLUG: ${{ github.repository }}
   ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
   GITHUB_ACTOR: precog-bot
@@ -25,50 +24,41 @@ env:
 jobs:
   build:
     name: Build and Test
-    if: '!(github.event_name == ''pull_request'' && github.event.pull_request.draft)'
+    if: '!(github.event_name == ''pull_request'' && github.event.pull_request.draft) && !(github.event_name == ''push'' && (github.ref == ''refs/heads/main'' || github.ref == ''refs/heads/master'') && !startsWith(github.event.head_commit.message, ''Version release''))'
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.12.12, 2.13.3]
-        java: [adopt@1.8, graalvm8@20.1.0]
+        scala: [2.13.11]
+        java: [temurin@17]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout current branch (full)
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v10
+      - name: Setup Java (temurin@17)
+        if: matrix.java == 'temurin@17'
+        uses: actions/setup-java@v3
         with:
-          java-version: ${{ matrix.java }}
-
-      - name: Cache sbt
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.sbt
-            ~/.ivy2/cache
-            ~/.coursier/cache/v1
-            ~/.cache/coursier/v1
-            ~/AppData/Local/Coursier/Cache/v1
-            ~/Library/Caches/Coursier/v1
-          key: ${{ runner.os }}-sbt-cache-v2-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/build.properties') }}-${{ hashFiles('.versions.json') }}
+          distribution: temurin
+          java-version: 17
+          cache: sbt
 
       - name: Common sbt setup
         if: env.ENCRYPTION_PASSWORD != null
-        run: $SBT ++${{ matrix.scala }} transferCommonResources exportSecretsForActions
+        run: $SBT '++ ${{ matrix.scala }}' transferCommonResources
 
       - name: Check that workflows are up to date
-        run: $SBT ++${{ matrix.scala }} githubWorkflowCheck
+        run: $SBT '++ ${{ matrix.scala }}' githubWorkflowCheck
 
-      - run: $SBT ++${{ matrix.scala }} ci
+      - run: $SBT '++ ${{ matrix.scala }}' ci
 
       - name: Compress target directories
         run: tar cf targets.tar target core/target project/target
 
       - name: Upload target directories
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: target-${{ matrix.os }}-${{ matrix.scala }}-${{ matrix.java }}
           path: targets.tar
@@ -76,63 +66,46 @@ jobs:
   publish:
     name: Publish Artifacts
     needs: [build]
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/backport/v') || github.ref == 'refs/heads/master')
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/backport/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (startsWith(github.event.head_commit.message, 'Version release'))
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.12.12]
-        java: [adopt@1.8]
+        scala: [2.13.11]
+        java: [temurin@17]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout current branch (full)
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v10
+      - name: Setup Java (temurin@17)
+        if: matrix.java == 'temurin@17'
+        uses: actions/setup-java@v3
         with:
-          java-version: ${{ matrix.java }}
+          distribution: temurin
+          java-version: 17
+          cache: sbt
 
-      - name: Cache sbt
-        uses: actions/cache@v2
+      - name: Download target directories (2.13.11)
+        uses: actions/download-artifact@v3
         with:
-          path: |
-            ~/.sbt
-            ~/.ivy2/cache
-            ~/.coursier/cache/v1
-            ~/.cache/coursier/v1
-            ~/AppData/Local/Coursier/Cache/v1
-            ~/Library/Caches/Coursier/v1
-          key: ${{ runner.os }}-sbt-cache-v2-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/build.properties') }}-${{ hashFiles('.versions.json') }}
+          name: target-${{ matrix.os }}-2.13.11-${{ matrix.java }}
 
-      - name: Download target directories (2.12.12)
-        uses: actions/download-artifact@v2
-        with:
-          name: target-${{ matrix.os }}-2.12.12-${{ matrix.java }}
-
-      - name: Inflate target directories (2.12.12)
-        run: |
-          tar xf targets.tar
-          rm targets.tar
-
-      - name: Download target directories (2.13.3)
-        uses: actions/download-artifact@v2
-        with:
-          name: target-${{ matrix.os }}-2.13.3-${{ matrix.java }}
-
-      - name: Inflate target directories (2.13.3)
+      - name: Inflate target directories (2.13.11)
         run: |
           tar xf targets.tar
           rm targets.tar
 
       - name: Common sbt setup
-        run: $SBT ++${{ matrix.scala }} transferCommonResources transferPublishAndTagResources exportSecretsForActions
+        run: $SBT transferCommonResources transferPublishAndTagResources
 
       - run: ./scripts/commonSetup
 
       - name: Publish artifacts and create tag
         run: ./scripts/publishAndTag ${{ github.repository }}
+
+      - run: $SBT dependencyUpdates
 
   auto-merge:
     name: Auto Merge
@@ -141,30 +114,137 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.12.12]
-        java: [adopt@1.8]
+        scala: [2.13.10]
+        java: [temurin@8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Merge
+        id: merge
+        uses: actions/github-script@v6
+        with:
+          script: |
+              github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{ github.event.pull_request.number }},
+              }); 
+          github-token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
+
+  check-labels:
+    name: Check Labels
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        scala: [2.13.10]
+        java: [temurin@8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check PR labels
+        uses: docker://agilepathway/pull-request-label-checker:v1.4.30
+        with:
+          one_of: 'version: breaking,version: feature,version: revision,version: release'
+          none_of: ':stop_sign:'
+          repo_token: ${{ env.GITHUB_TOKEN }}
+
+  next-version:
+    name: Next version
+    if: github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Version release')
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        scala: [2.13.10]
+        java: [temurin@8]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout current branch (fast)
-        uses: actions/checkout@v2
-
-      - name: Setup Java and Scala
-        uses: olafurpg/setup-scala@v10
+        uses: actions/checkout@v3
         with:
-          java-version: ${{ matrix.java }}
+          token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
 
-      - name: Common sbt setup
-        run: $SBT ++${{ matrix.scala }} transferCommonResources exportSecretsForActions
+      - name: Get current version
+        id: current_version
+        run: echo "CURRENT_VERSION=$(cat version.sbt | awk '{ gsub(/"/, "", $5); print $5 }')" >> $GITHUB_OUTPUT
 
-      - name: Fetch the latest sdmerge
-        run: |
-          curl -L https://github.com/precog/devtools/raw/master/bin/sdmerge > /tmp/sdmerge
-          chmod +x /tmp/sdmerge
+      - name: Compute next version
+        id: compute_next_version
+        uses: actions/github-script@v6
+        with:
+          script: |
+              const currentVersion = '${{steps.current_version.outputs.CURRENT_VERSION}}'
+              const parsedVersion = currentVersion.split(".")
+              var major = Number(parsedVersion[0])
+              var minor = Number(parsedVersion[1])
+              var patch = Number(parsedVersion[2])
 
-      - name: Self-merge
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          git config --global user.email "bot@precog.com"
-          git config --global user.name "Precog Bot"
-          /tmp/sdmerge $GITHUB_REPOSITORY $PR_NUMBER
+              const prResponse = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha
+              })
+
+              const prs = prResponse.data
+
+              if (prs === undefined) {
+                throw new Error("Could not fetch PRs for commit: status " + prs.status)
+              } else if (prs.length > 1) {
+                throw new Error("Cannot determine version increment required as there is more than one PR associated with the commit: " + context.sha)
+              } else if (prs.length === 0) {
+                throw new Error("Cannot determine version increment required as there are no PRs associated with the commit: " + context.sha)
+              } 
+
+              const pr = prs[0]
+
+              for (const label of pr.labels) {
+                 if (label.name === 'version: revision') {
+                    patch = patch + 1
+                    break
+                 } else if (label.name === 'version: feature') {
+                    patch = 0
+                    minor = minor + 1
+                    break
+                 } else if (label.name === 'version: breaking') {
+                    major = major + 1
+                    minor = 0
+                    patch = 0
+                    break
+                 } else if (label.name === 'version: release') {
+                    major = major + 1
+                    minor = 0
+                    patch = 0
+                    break
+                 }
+              }
+
+              const nextVersion = major + '.' + minor + '.' + patch
+
+              if (nextVersion === currentVersion) {
+                throw new Error("Could not detect the version label on PR " + pr.number + " (obtained via association to commit " + context.sha + ")")
+              }
+
+              console.log("Setting the next version to " + nextVersion)
+
+              var body = ""
+              if (pr.body === undefined || pr.body === null || pr.body === "") {
+                body = ""
+              } else {
+                body = "\n" + pr.body.replaceAll("\r\n", "\n")
+              }
+
+              // set outputs for 
+              const result = {
+                nextVersion: nextVersion,
+                commitMessage: "Version release: " + nextVersion + "\n\n" + pr.title + body
+              }
+              return result
+
+      - name: Modify version
+        id: modify_version
+        run: 'echo ''ThisBuild / version := "${{fromJson(steps.compute_next_version.outputs.result).nextVersion}}"'' > version.sbt'
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: ${{fromJson(steps.compute_next_version.outputs.result).commitMessage}}
+          commit_user_name: precog-bot
+          commit_user_email: bot@precog.com

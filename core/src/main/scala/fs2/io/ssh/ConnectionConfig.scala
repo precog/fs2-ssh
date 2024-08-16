@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Precog Data
+ * Copyright 2022 Precog Data Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,4 +19,8 @@ package fs2.io.ssh
 import java.lang.String
 import java.net.InetSocketAddress
 
-final case class ConnectionConfig(host: InetSocketAddress, username: String, auth: Auth)
+final case class ConnectionConfig(
+    host: InetSocketAddress,
+    username: String,
+    auth: Auth
+)

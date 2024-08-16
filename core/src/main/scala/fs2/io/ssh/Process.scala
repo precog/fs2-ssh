@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Precog Data
+ * Copyright 2022 Precog Data Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ import scala.{Array, Byte, Int, Unit}
 import java.io.IOException
 import java.lang.{SuppressWarnings, Throwable}
 
-final class Process[F[_]] private[ssh] (
-    channel: ChannelExec,
-    chunkSize: Int)(implicit F: Async[F]) {
+final class Process[F[_]] private[ssh] (channel: ChannelExec, chunkSize: Int)(
+    implicit F: Async[F]
+) {
 
   import MinaFuture.fromFuture
 
@@ -57,18 +57,23 @@ final class Process[F[_]] private[ssh] (
   }
 
   // TODO I'm pretty sure this stream is ephemeral and we might miss things
-  private[this] def ioisToStream(iois: IoInputStream, chunkSize: Int): Stream[F, Byte] = {
+  private[this] def ioisToStream(
+      iois: IoInputStream,
+      chunkSize: Int
+  ): Stream[F, Byte] = {
     val readF = fromFuture(F.delay(iois.read(new ByteArrayBuffer(chunkSize))))
 
-    Stream.eval(readF)
+    Stream
+      .eval(readF)
       .repeat
       .handleErrorWith {
         case t: IOException =>
-          Stream.eval(F.delay(iois.isClosed() || iois.isClosing())) flatMap { closing =>
-            if (closing)
-              Stream.empty
-            else
-              Stream.raiseError[F](t)
+          Stream.eval(F.delay(iois.isClosed() || iois.isClosing())) flatMap {
+            closing =>
+              if (closing)
+                Stream.empty
+              else
+                Stream.raiseError[F](t)
           }
 
         case t: Throwable =>
@@ -78,19 +83,22 @@ final class Process[F[_]] private[ssh] (
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  private[this] def ioosToSink(ioosF: F[IoOutputStream]): Pipe[F, Byte, Unit] = { in =>
+  private[this] def ioosToSink(
+      ioosF: F[IoOutputStream]
+  ): Pipe[F, Byte, Unit] = { in =>
     Stream.eval(ioosF) flatMap { ioos =>
       val written = in.chunks evalMap { chunk =>
         // This results in fewer allocations when Chunk is already backed by an Array[Byte].
         val bytes = chunk.toArraySlice
-        val buffer = new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
+        val buffer =
+          new ByteArrayBuffer(bytes.values, bytes.offset, bytes.length)
         fromFuture(F.delay(ioos.writeBuffer(buffer)))
       }
 
-      written.takeWhile(_ == true)
+      written
+        .takeWhile(_ == true)
         .void
-        .onComplete(
-          Stream.exec(fromFuture(F.delay(ioos.close(false))).void))
+        .onComplete(Stream.exec(fromFuture(F.delay(ioos.close(false))).void))
     }
   }
 }

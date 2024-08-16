@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Precog Data
+ * Copyright 2022 Precog Data Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,17 @@ object Auth {
   final case class Password(text: String) extends Auth
 
   @SuppressWarnings(Array("org.wartremover.warts.DefaultArguments"))
-  final case class KeyFile(privateKey: Path, password: Option[String] = None) extends Auth
+  final case class KeyFile(privateKey: Path, password: Option[String] = None)
+      extends Auth
 
   @SuppressWarnings(
     Array(
       "org.wartremover.warts.DefaultArguments",
-      "org.wartremover.warts.ArrayEquals"))   // I hate wartremover...
-  final case class KeyBytes(privateKey: Array[Byte], password: Option[String] = None) extends Auth
+      "org.wartremover.warts.ArrayEquals"
+    )
+  ) // I hate wartremover...
+  final case class KeyBytes(
+      privateKey: Array[Byte],
+      password: Option[String] = None
+  ) extends Auth
 }
