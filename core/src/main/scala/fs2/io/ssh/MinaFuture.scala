@@ -41,12 +41,9 @@ private[ssh] trait MinaFuture[S <: SshFuture[S]] {
 private[ssh] object MinaFuture {
 
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  def fromFuture[
-      F[_]: Async,
-      S <: SshFuture[S]](
-      fcf: F[S])(
-      implicit S: MinaFuture[S])
-      : F[S.A] = {
+  def fromFuture[F[_]: Async, S <: SshFuture[S]](
+      fcf: F[S]
+  )(implicit S: MinaFuture[S]): F[S.A] = {
 
     Async[F].async[S.A] { cb =>
       fcf flatMap { fut =>

@@ -19,4 +19,8 @@ package fs2.io.ssh
 import java.lang.String
 import java.net.InetSocketAddress
 
-final case class ConnectionConfig(host: InetSocketAddress, username: String, auth: Auth)
+final case class ConnectionConfig(
+    host: InetSocketAddress,
+    username: String,
+    auth: Auth
+)

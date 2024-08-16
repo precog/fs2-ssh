@@ -33,8 +33,8 @@ import java.security.KeyPair
 // why tf doesn't this exist in mina already??
 private[ssh] final class ByteArrayKeyPairProvider private (
     bytes: Array[Byte],
-    maybePass: Option[String])
-    extends AbstractKeyPairProvider {
+    maybePass: Option[String]
+) extends AbstractKeyPairProvider {
 
   private[this] val BytesMagicKey = "<bytes>"
 
@@ -47,22 +47,25 @@ private[ssh] final class ByteArrayKeyPairProvider private (
       NamedResource.ofName(BytesMagicKey),
       bis,
       maybePass match {
-        case Some(password) =>
-          { (session, key, _) =>
-            if (key.getName() === BytesMagicKey)
-              password
-            else
-              null
-          }
+        case Some(password) => { (session, key, _) =>
+          if (key.getName() === BytesMagicKey)
+            password
+          else
+            null
+        }
 
         case None =>
           FilePasswordProvider.EMPTY
-      })
+      }
+    )
   }
 }
 
 object ByteArrayKeyPairProvider {
 
-  def apply(bytes: Array[Byte], maybePass: Option[String]): ByteArrayKeyPairProvider =
+  def apply(
+      bytes: Array[Byte],
+      maybePass: Option[String]
+  ): ByteArrayKeyPairProvider =
     new ByteArrayKeyPairProvider(bytes, maybePass)
 }
