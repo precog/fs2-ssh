@@ -25,7 +25,7 @@ import cats.effect.{IO, Resource}
 import cats.implicits._
 import cats.mtl.Raise
 import fs2.io.file.{Files, Flags}
-import org.http4s.okhttp.client.OkHttpBuilder
+import org.http4s.ember.client.EmberClientBuilder
 
 import scala.concurrent.duration._
 import scala.{Byte, None, Some, StringContext, Unit, math}
@@ -36,20 +36,16 @@ import java.nio.file.Paths
 import munit.CatsEffectSuite
 import scala.annotation.nowarn
 
-// these are really more like integration tests
-// to run them locally, make sure you have things from
-// the "fs2-ssh test server" entry in 1Password
-// they will only run on Travis if you push your branch to upstream
 class ClientSpec extends CatsEffectSuite with SshDockerService {
 
-  override val munitTimeout = Duration(90, "s")
+  override val munitIOTimeout = Duration(90, "s")
 
   val testHost = "localhost"
   val testUser = "fs2-ssh"
   val testPassword = "password"
   val keyPassword = "password"
 
-  val fixture = ResourceFixture(containerResource)
+  val fixture = ResourceFunFixture(containerResource)
 
   def setup[F[_]: Async](testPort: Int)(
       f: (Client[F], InetSocketAddress) => Resource[F, Unit]
@@ -331,14 +327,13 @@ class ClientSpec extends CatsEffectSuite with SshDockerService {
         ConnectionConfig(isa, testUser, Auth.Password(testPassword)),
         InetSocketAddress.createUnresolved("127.0.0.1", 3000),
         InetSocketAddress.createUnresolved(isa.getHostString, 3000)
-      ) >> OkHttpBuilder.withDefaultClient[IO].flatMap(_.resource).evalMap {
-        client =>
-          client
-            .get("http://127.0.0.1:3000")(r => IO.pure(r.status.isSuccess))
-            .map { result =>
-              assert(result)
-            }
-            .void
+      ) >> EmberClientBuilder.default[IO].build.evalMap { client =>
+        client
+          .get("http://127.0.0.1:3000")(r => IO.pure(r.status.isSuccess))
+          .map { result =>
+            assert(result)
+          }
+          .void
       }
     }
   }

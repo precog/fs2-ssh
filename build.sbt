@@ -1,7 +1,4 @@
-import sbt.TestFrameworks.Specs2
-import scala.collection.Seq
-
-ThisBuild / crossScalaVersions := Seq("2.13.11")
+ThisBuild / crossScalaVersions := Seq("2.13.16")
 ThisBuild / scalaVersion := (ThisBuild / crossScalaVersions).value.head
 
 ThisBuild / githubRepository := "fs2-ssh"
@@ -17,14 +14,17 @@ ThisBuild / scmInfo := Some(
 
 ThisBuild / logBuffered := false
 
-val CatsEffectVersion = "3.4.11"
-val CatsMtlVersion = "1.3.0"
-val Fs2Version = "3.6.1"
-val NettyVersion = "4.1.112.Final"
+val CatsEffectVersion = "3.6.3"
+val CatsMtlVersion = "1.6.0"
+val DockerClientVersion = "9.0.4"
+val Fs2Version = "3.12.2"
+val Http4sVersion = "0.23.32"
+val Log4jVersion = "2.19.0"
+val NettyVersion = "4.1.125.Final"
 val SshdVersion = "2.12.1"
-val MunitCatsEffectVersion = "1.0.7"
-val MunitVersion = "0.7.29"
-val TestContainersVersion = "0.40.10"
+val MunitCatsEffectVersion = "2.1.0"
+val MunitVersion = "1.2.1"
+val TestContainersVersion = "0.43.0"
 
 // Include to also publish a project's tests
 lazy val publishTestsSettings = Seq(Test / packageBin / publishArtifact := true)
@@ -46,12 +46,12 @@ lazy val core = project
       "org.typelevel" %% "cats-mtl" % CatsMtlVersion,
 
       // apparently vertically aligning this chunk causes sbt to freak out... for reasons
-      "org.apache.logging.log4j" % "log4j-slf4j-impl" % "2.19.0" % Test,
-      "org.mandas" % "docker-client" % "8.0.2" % Test,
-      "org.http4s" %% "http4s-okhttp-client" % "0.23.11" % Test,
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % Log4jVersion % Test,
+      "org.mandas" % "docker-client" % DockerClientVersion % Test,
+      "org.http4s" %% "http4s-ember-client" % Http4sVersion % Test,
       "co.fs2" %% "fs2-io" % Fs2Version % Test,
       "org.scalameta" %% "munit" % MunitVersion % Test,
-      "org.typelevel" %% "munit-cats-effect-3" % MunitCatsEffectVersion % Test,
+      "org.typelevel" %% "munit-cats-effect" % MunitCatsEffectVersion % Test,
       "com.dimafeng" %% "testcontainers-scala-core" % TestContainersVersion % Test
     ),
     dependencyOverrides ++= Seq(
@@ -66,9 +66,6 @@ lazy val core = project
       "io.netty" % "netty-handler-proxy" % NettyVersion
     ),
     Test / scalacOptions += "-Yrangepos",
-    Test / testOptions := Seq(
-      Tests.Argument(Specs2, "exclude", "exclusive", "showtimes")
-    ),
     Test / parallelExecution := false,
     publishAsOSSProject := true,
     initialCommands := """
