@@ -14,6 +14,10 @@ ThisBuild / scmInfo := Some(
 
 ThisBuild / logBuffered := false
 
+ThisBuild / dependencyOverrides ++= Seq(
+  "org.typelevel" %% "kind-projector" % "0.13.3" cross CrossVersion.full
+)
+
 val CatsEffectVersion = "3.6.3"
 val CatsMtlVersion = "1.6.0"
 val DockerClientVersion = "9.0.4"

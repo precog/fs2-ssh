@@ -16,9 +16,6 @@ on:
 
 env:
   SBT: sbt
-  SONATYPE_OSS_INDEX_PASSWORD: ${{ secrets.SONATYPE_OSS_INDEX_PASSWORD }}
-  SONATYPE_OSS_INDEX_USERNAME: ${{ secrets.SONATYPE_OSS_INDEX_USERNAME }}
-  NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
   REPO_SLUG: ${{ github.repository }}
   ENCRYPTION_PASSWORD: ${{ secrets.ENCRYPTION_PASSWORD }}
   GITHUB_ACTOR: precog-bot
@@ -140,15 +137,6 @@ jobs:
         run: $SBT '++ ${{ matrix.scala }}' githubWorkflowCheck
 
       - run: $SBT '++ ${{ matrix.scala }}' ci
-
-      - name: Upload dependency scanner results artifact
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: |
-            target/scala-2.12/sbt-1.0/dependency-check-report.html
-            target/**/dependency-check-report.json
 
       - name: Compress target directories
         run: tar cf targets.tar target core/target project/target
