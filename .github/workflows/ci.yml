@@ -24,176 +24,71 @@ env:
 jobs:
   build:
     name: Build and Test
-    if: '!(github.event_name == ''pull_request'' && github.event.pull_request.draft) && !(github.event_name == ''push'' && (github.ref == ''refs/heads/main'' || github.ref == ''refs/heads/master'') && !startsWith(github.event.head_commit.message, ''Version release''))'
+    if: '!(github.event_name == ''pull_request'' && github.event.pull_request.draft)'
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.13.11]
+        scala: [2.13.16]
         java: [temurin@17]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout current branch (full)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Java (temurin@17)
         if: matrix.java == 'temurin@17'
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: sbt
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
 
       - name: Common sbt setup
         if: env.ENCRYPTION_PASSWORD != null
         run: $SBT '++ ${{ matrix.scala }}' transferCommonResources
 
-      - name: Check that workflows are up to date
-        run: $SBT '++ ${{ matrix.scala }}' githubWorkflowCheck
-
-      - run: $SBT '++ ${{ matrix.scala }}' ci
-
-      - name: Compress target directories
-        run: tar cf targets.tar target core/target project/target
-
-      - name: Upload target directories
-        uses: actions/upload-artifact@v3
-        with:
-          name: target-${{ matrix.os }}-${{ matrix.scala }}-${{ matrix.java }}
-          path: targets.tar
-
-  publish:
-    name: Publish Artifacts
-    needs: [build]
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/backport/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (startsWith(github.event.head_commit.message, 'Version release'))
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        scala: [2.13.11]
-        java: [temurin@17]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout current branch (full)
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Setup Java (temurin@17)
-        if: matrix.java == 'temurin@17'
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
-          cache: sbt
-
-      - name: Download target directories (2.13.11)
-        uses: actions/download-artifact@v3
-        with:
-          name: target-${{ matrix.os }}-2.13.11-${{ matrix.java }}
-
-      - name: Inflate target directories (2.13.11)
-        run: |
-          tar xf targets.tar
-          rm targets.tar
-
-      - name: Common sbt setup
-        run: $SBT transferCommonResources transferPublishAndTagResources
-
-      - run: ./scripts/commonSetup
-
-      - name: Publish artifacts and create tag
-        run: ./scripts/publishAndTag ${{ github.repository }}
-
-      - run: $SBT dependencyUpdates
-
-  auto-merge:
-    name: Auto Merge
-    needs: [build]
-    if: 'github.event_name == ''pull_request'' && contains(github.head_ref, ''version-bump'') && contains(github.event.pull_request.labels.*.name, ''version: revision'')'
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        scala: [2.13.10]
-        java: [temurin@8]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Merge
-        id: merge
-        uses: actions/github-script@v6
-        with:
-          script: |
-              github.rest.pulls.merge({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: ${{ github.event.pull_request.number }},
-              }); 
-          github-token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
-
-  check-labels:
-    name: Check Labels
-    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        scala: [2.13.10]
-        java: [temurin@8]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Check PR labels
-        uses: docker://agilepathway/pull-request-label-checker:v1.4.30
-        with:
-          one_of: 'version: breaking,version: feature,version: revision,version: release'
-          none_of: ':stop_sign:'
-          repo_token: ${{ env.GITHUB_TOKEN }}
-
-  next-version:
-    name: Next version
-    if: github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Version release')
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        scala: [2.13.10]
-        java: [temurin@8]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout current branch (fast)
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
+      - name: Fetch base
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{github.event.pull_request.base.ref}}
 
       - name: Get current version
         id: current_version
-        run: echo "CURRENT_VERSION=$(cat version.sbt | awk '{ gsub(/"/, "", $5); print $5 }')" >> $GITHUB_OUTPUT
+        if: github.event_name == 'pull_request'
+        run: echo 'CURRENT_VERSION='$(cat version.sbt | grep version | awk '{ gsub(/"/, "", $5); print $5 }') >> $GITHUB_OUTPUT
 
-      - name: Compute next version
-        id: compute_next_version
+      - name: Get version on target
+        id: target_version
+        if: github.event_name == 'pull_request'
+        run: 'echo ''TARGET_VERSION=''$(git show origin/${{github.event.pull_request.base.ref}}:version.sbt | grep version | awk ''{ gsub(/"/, "", $5); print $5 }'') >> $GITHUB_OUTPUT'
+
+      - name: Compare versions
+        id: compare_versions
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v6
         with:
           script: |
-              const currentVersion = '${{steps.current_version.outputs.CURRENT_VERSION}}'
-              const parsedVersion = currentVersion.split(".")
+              const versionToBump = '${{steps.target_version.outputs.TARGET_VERSION}}'
+              const parsedVersion = versionToBump.split(".")
               var major = Number(parsedVersion[0])
               var minor = Number(parsedVersion[1])
               var patch = Number(parsedVersion[2])
 
-              const prResponse = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              const prResponse = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                commit_sha: context.sha
+                pull_number: ${{github.event.pull_request.number}}
               })
 
-              const prs = prResponse.data
+              const pr = prResponse.data
 
-              if (prs === undefined) {
-                throw new Error("Could not fetch PRs for commit: status " + prs.status)
-              } else if (prs.length > 1) {
-                throw new Error("Cannot determine version increment required as there is more than one PR associated with the commit: " + context.sha)
-              } else if (prs.length === 0) {
-                throw new Error("Cannot determine version increment required as there are no PRs associated with the commit: " + context.sha)
-              } 
-
-              const pr = prs[0]
+              if (pr === undefined || prResponse.status !== 200) {
+                throw new Error("Could not fetch PR with number " + ${{github.event.pull_request.number}} + ": " + prResponse.status)
+              }
 
               for (const label of pr.labels) {
                  if (label.name === 'version: revision') {
@@ -216,35 +111,234 @@ jobs:
                  }
               }
 
-              const nextVersion = major + '.' + minor + '.' + patch
+              const bumpedVersion = major + '.' + minor + '.' + patch
+              const currentVersion = '${{steps.current_version.outputs.CURRENT_VERSION}}'
 
-              if (nextVersion === currentVersion) {
-                throw new Error("Could not detect the version label on PR " + pr.number + " (obtained via association to commit " + context.sha + ")")
+              if (bumpedVersion === versionToBump) {
+                throw new Error("Could not detect the version label on PR " + pr.number)
               }
 
-              console.log("Setting the next version to " + nextVersion)
-
-              var body = ""
-              if (pr.body === undefined || pr.body === null || pr.body === "") {
-                body = ""
+              if (bumpedVersion !== currentVersion) {
+                console.log("Detected that bump is required to: " + bumpedVersion)
+                return {
+                  nextVersion: bumpedVersion
+                }
               } else {
-                body = "\n" + pr.body.replaceAll("\r\n", "\n")
+                console.log("No bump is required")
+                return { nextVersion: "" }
               }
 
-              // set outputs for 
-              const result = {
-                nextVersion: nextVersion,
-                commitMessage: "Version release: " + nextVersion + "\n\n" + pr.title + body
-              }
-              return result
+      
+      - name: Ensure version does not need bumping
+        if: github.event_name == 'pull_request'
+        run: '[ "${{fromJson(steps.compare_versions.outputs.result).nextVersion}}" = "" ]'
 
+      - name: Check that workflows are up to date
+        run: $SBT '++ ${{ matrix.scala }}' githubWorkflowCheck
+
+      - run: $SBT '++ ${{ matrix.scala }}' ci
+
+      - name: Compress target directories
+        run: tar cf targets.tar target core/target project/target
+
+      - name: Upload target directories
+        uses: actions/upload-artifact@v4
+        with:
+          name: target-${{ matrix.os }}-${{ matrix.scala }}-${{ matrix.java }}
+          path: targets.tar
+
+  publish:
+    name: Publish Artifacts
+    needs: [build]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/backport/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        scala: [2.13.16]
+        java: [temurin@17]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout current branch (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java (temurin@17)
+        if: matrix.java == 'temurin@17'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: sbt
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Download target directories (2.13.16)
+        uses: actions/download-artifact@v4
+        with:
+          name: target-${{ matrix.os }}-2.13.16-${{ matrix.java }}
+
+      - name: Inflate target directories (2.13.16)
+        run: |
+          tar xf targets.tar
+          rm targets.tar
+
+      - name: Common sbt setup
+        run: $SBT transferCommonResources transferPublishAndTagResources
+
+      - run: ./scripts/commonSetup
+
+      - name: Publish artifacts and create tag
+        run: ./scripts/publishAndTag ${{ github.repository }}
+
+      - run: $SBT dependencyUpdates
+
+  bump_version:
+    name: Bump Version
+    needs: [check-labels]
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'backport/v') || github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'master')
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        scala: [2.13.10]
+        java: [zulu@8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout current branch (fast)
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
+
+      - name: Fetch base
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{github.event.pull_request.base.ref}}
+
+      - name: Get current version
+        id: current_version
+        if: github.event_name == 'pull_request'
+        run: echo 'CURRENT_VERSION='$(cat version.sbt | grep version | awk '{ gsub(/"/, "", $5); print $5 }') >> $GITHUB_OUTPUT
+
+      - name: Get version on target
+        id: target_version
+        if: github.event_name == 'pull_request'
+        run: 'echo ''TARGET_VERSION=''$(git show origin/${{github.event.pull_request.base.ref}}:version.sbt | grep version | awk ''{ gsub(/"/, "", $5); print $5 }'') >> $GITHUB_OUTPUT'
+
+      - name: Compare versions
+        id: compare_versions
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+              const versionToBump = '${{steps.target_version.outputs.TARGET_VERSION}}'
+              const parsedVersion = versionToBump.split(".")
+              var major = Number(parsedVersion[0])
+              var minor = Number(parsedVersion[1])
+              var patch = Number(parsedVersion[2])
+
+              const prResponse = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{github.event.pull_request.number}}
+              })
+
+              const pr = prResponse.data
+
+              if (pr === undefined || prResponse.status !== 200) {
+                throw new Error("Could not fetch PR with number " + ${{github.event.pull_request.number}} + ": " + prResponse.status)
+              }
+
+              for (const label of pr.labels) {
+                 if (label.name === 'version: revision') {
+                    patch = patch + 1
+                    break
+                 } else if (label.name === 'version: feature') {
+                    patch = 0
+                    minor = minor + 1
+                    break
+                 } else if (label.name === 'version: breaking') {
+                    major = major + 1
+                    minor = 0
+                    patch = 0
+                    break
+                 } else if (label.name === 'version: release') {
+                    major = major + 1
+                    minor = 0
+                    patch = 0
+                    break
+                 }
+              }
+
+              const bumpedVersion = major + '.' + minor + '.' + patch
+              const currentVersion = '${{steps.current_version.outputs.CURRENT_VERSION}}'
+
+              if (bumpedVersion === versionToBump) {
+                throw new Error("Could not detect the version label on PR " + pr.number)
+              }
+
+              if (bumpedVersion !== currentVersion) {
+                console.log("Detected that bump is required to: " + bumpedVersion)
+                return {
+                  nextVersion: bumpedVersion
+                }
+              } else {
+                console.log("No bump is required")
+                return { nextVersion: "" }
+              }
+
+      
       - name: Modify version
         id: modify_version
-        run: 'echo ''ThisBuild / version := "${{fromJson(steps.compute_next_version.outputs.result).nextVersion}}"'' > version.sbt'
+        if: fromJson(steps.compare_versions.outputs.result).nextVersion != ''
+        run: |
+          printf '// Last bumped by PR ${{github.event.pull_request.number}}
+          ThisBuild / version := "${{fromJson(steps.compare_versions.outputs.result).nextVersion}}"
+          ' > version.sbt
 
       - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v4
+        if: fromJson(steps.compare_versions.outputs.result).nextVersion != ''
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: ${{fromJson(steps.compute_next_version.outputs.result).commitMessage}}
+          commit_message: 'Version bump: ${{fromJson(steps.compare_versions.outputs.result).nextVersion}}'
           commit_user_name: precog-bot
           commit_user_email: bot@precog.com
+
+  auto-merge:
+    name: Auto Merge
+    needs: [build, bump_version]
+    if: 'github.event_name == ''pull_request'' && contains(github.head_ref, ''version-bump'') && contains(github.event.pull_request.labels.*.name, ''version: revision'') && github.event.pull_request.user.login == ''precog-bot'''
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        scala: [2.13.10]
+        java: [zulu@8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Merge
+        id: merge
+        uses: actions/github-script@v6
+        with:
+          script: |
+              github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{ github.event.pull_request.number }},
+              }); 
+          github-token: ${{ secrets.PRECOG_GITHUB_TOKEN }}
+
+  check-labels:
+    name: Check Labels
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        scala: [2.13.10]
+        java: [zulu@8]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check PR labels
+        uses: docker://agilepathway/pull-request-label-checker:v1.4.30
+        with:
+          one_of: 'version: breaking,version: feature,version: revision,version: release'
+          none_of: ':stop_sign:'
+          repo_token: ${{ env.GITHUB_TOKEN }}

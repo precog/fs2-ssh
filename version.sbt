@@ -1,1 +1,2 @@
-ThisBuild / version := "3.0.1"
+// Last bumped by PR 108
+ThisBuild / version := "3.1.0"
