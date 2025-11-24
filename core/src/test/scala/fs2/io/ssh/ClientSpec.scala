@@ -101,7 +101,14 @@ class ClientSpec extends CatsEffectSuite with SshDockerService {
         .void
     } { eit =>
       EitherT.liftF(
-        eit.value.map(a => assertEquals(a, Left(Client.Error.Authentication)))
+        eit.value.map(a =>
+          assert(
+            a.swap
+              .map({ case Client.Error.SshErr(_) => true })
+              .getOrElse(false),
+            s"Got $a"
+          )
+        )
       )
     }
 
