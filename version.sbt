@@ -1,2 +1,2 @@
-// Last bumped by PR 108
-ThisBuild / version := "3.1.0"
+// Last bumped by PR 110
+ThisBuild / version := "4.0.0"

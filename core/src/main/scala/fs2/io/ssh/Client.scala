@@ -141,8 +141,8 @@ final class Client[F[_]] private (client: SshClient)(implicit F: Async[F]) {
 
       _ <- Resource eval {
         success match {
-          case Left(_: SshException) =>
-            FR.raise(Error.Authentication)
+          case Left(ex: SshException) =>
+            FR.raise(Error.SshErr(ex))
 
           case Left(e) =>
             F.raiseError(e)
@@ -189,6 +189,6 @@ object Client {
   sealed trait Error extends Product with Serializable
 
   object Error {
-    case object Authentication extends Error
+    case class SshErr(ex: SshException) extends Error
   }
 }
