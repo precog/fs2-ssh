@@ -1,4 +1,4 @@
-ThisBuild / crossScalaVersions := Seq("2.13.16")
+ThisBuild / crossScalaVersions := Seq("2.13.18", "3.3.8")
 ThisBuild / scalaVersion := (ThisBuild / crossScalaVersions).value.head
 
 ThisBuild / githubRepository := "fs2-ssh"
@@ -13,10 +13,6 @@ ThisBuild / scmInfo := Some(
 )
 
 ThisBuild / logBuffered := false
-
-ThisBuild / dependencyOverrides ++= Seq(
-  "org.typelevel" %% "kind-projector" % "0.13.3" cross CrossVersion.full
-)
 
 val CatsEffectVersion = "3.6.3"
 val CatsMtlVersion = "1.6.0"
@@ -69,7 +65,9 @@ lazy val core = project
       "io.netty" % "netty-codec-socks" % NettyVersion,
       "io.netty" % "netty-handler-proxy" % NettyVersion
     ),
-    Test / scalacOptions += "-Yrangepos",
+    Test / scalacOptions ++= {
+      if (scalaVersion.value.startsWith("2.")) Seq("-Yrangepos") else Seq()
+    },
     Test / parallelExecution := false,
     publishAsOSSProject := true,
     initialCommands := """
@@ -84,5 +82,7 @@ lazy val core = project
       | import java.nio.file.Paths
       |
       | val auth = Auth.Key(Paths.get("id_rsa_testing"), None)""".stripMargin,
-    Compile / console / scalacOptions += "-Ydelambdafy:inline"
+    Compile / console / scalacOptions ++= {
+      if (scalaVersion.value.startsWith("2.")) Seq("-Ydelambdafy:inline") else Seq()
+    }
   )
