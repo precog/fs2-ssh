@@ -83,6 +83,7 @@ lazy val core = project
       |
       | val auth = Auth.Key(Paths.get("id_rsa_testing"), None)""".stripMargin,
     Compile / console / scalacOptions ++= {
-      if (scalaVersion.value.startsWith("2.")) Seq("-Ydelambdafy:inline") else Seq()
+      if (scalaVersion.value.startsWith("2.")) Seq("-Ydelambdafy:inline")
+      else Seq()
     }
   )
