@@ -9,10 +9,13 @@ name: Clean
 
 on: push
 
+permissions:
+  actions: write
+
 jobs:
   delete-artifacts:
     name: Delete Artifacts
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
